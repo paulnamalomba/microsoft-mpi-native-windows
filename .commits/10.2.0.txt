@@ -1,0 +1,132 @@
+microsoft-mpi-native-windows 10.2.0 Release Family Notes
+Note Date: October 16, 2026
+========================================================
+
+Release family:            10.2.0
+Accepted internal version: 10.2.0.0 (unbuilt seed; no build has run)
+Authoritative version:     MSMPI_INTERNAL_VERSION
+Upstream MS-MPI:           10.1.12498.16 (src/mpi.props: ProductMajorVersion 10,
+                           ProductMinorVersion 1, BuildMajorVersion 12498,
+                           BuildMinorVersion 16; MSMPI_VER 0x0A01). Unchanged.
+Upstream source commit:    f2d849ff483b36add9bc2d18c6d7bbc9ce38f4ad
+                           "Merge pull request #71 from avikram2/master"
+                           (Ayush Vikram, 2024-03-05T16:01:14-08:00)
+Last upstream tag:         v10.1.1 (c8daf40). Inspected for history only and
+                           not republished in this fork.
+Preceding accepted build:  none. This is the first family note.
+Fork remote:               origin
+                           https://github.com/paulnamalomba/microsoft-mpi-native-windows.git
+Superproject path:         SESKAFEA dependencies/msmpi
+
+MAJOR CHANGES
+=============
+
+## [10.2.0.0] - 2026-10-16
+
+Diff Baseline
+=============
+
+- Base commit: `f2d849f`, equal to `origin/master`. The submodule clone is
+  complete (`git rev-parse --is-shallow-repository` reports `false`; 50
+  commits). Working branch: `feature/native-seska-integration`.
+- Scope: new files only. `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`,
+  `ANTIGRAVITY_INSTRUCTIONS.md`, `MSMPI_INTERNAL_VERSION`,
+  `.commits/manage-repo.ps1`, `.commits/builds/` (empty) and this note.
+  Upstream source files are unchanged.
+- Version progression: none. The accepted version is `10.2.0.0`; numeric
+  build counter 0 -> 0.
+- No MS-MPI configure, build, test, tag or release was performed for this
+  record.
+
+Fork Contract (AGENTS.md)
+=========================
+
+- This is the user's independently maintained MS-MPI fork for native Windows
+  x64 SESKAFEA. Upstream microsoft/Microsoft-MPI is a read/fetch reference
+  only: no upstream push remote, branches, tags, pull requests, issues or
+  comments. Upstream tags `v10.0` and `v10.1.1` were briefly pushed to the
+  fork during setup and deleted at the user's direction; the fork carries no
+  upstream tags.
+- Version seed `10.2.0.0` follows the PETSc precedent (upstream 3.26 led to
+  internal 3.27.0.0). The upstream release line is 10.1 (last tag v10.1.1;
+  Microsoft's published binaries reach 10.1.3), so the 10.2 family cannot
+  collide with a Microsoft release. Tags use `native/v<internal version>`.
+- Upstream version fields and `MSMPI_VER` stay unchanged. The identity
+  carried by shipped file-version resources is an open decision before the
+  first release.
+- The MPI ABI that consumers link against (headers, Fortran modules,
+  msmpi.dll exports, import libraries) must be preserved unless the user
+  decides otherwise.
+- `.commits/manage-repo.ps1` is SESKA's repository script with four fork
+  parameters: version file `MSMPI_INTERNAL_VERSION`, owned repository
+  `github.com/paulnamalomba/microsoft-mpi-native-windows`, tag prefix
+  `native/v`, product `msmpi-native-windows`. It never changes the version
+  file and refuses mutating actions on a detached HEAD.
+
+Observed Upstream Build System (to be ported)
+=============================================
+
+- 21 `.vcxproj` projects driven by `dirs.proj`, using the 2017 CommonBuildToolSet
+  (`.build/CBT`, NuGet restore with .NET desktop workloads).
+  `Directory.Build.props` pins `PlatformToolset v141`, `VCToolsVersion
+  14.15.26726` and `WindowsTargetPlatformVersion 10.0.16299.0`. Upstream's README
+  also requires the Windows WDK.
+- Fortran interfaces: `src/mpi/msmpi/fortran/lib/mpifort.vcxproj` runs
+  `$(GFORTRAN_BIN)\gfortran.exe`, with `GFORTRAN_BIN` set to a mingw-w64
+  8.1.0 path in `Directory.Build.props:112`. MinGW is excluded, so the port must
+  build these interfaces with the pinned Intel `ifx` and keep the consumer
+  ABI (`msmpifec`, `msmpifmc`, modules) compatible.
+- Error-message generation: `src/mpi/common/mpicommon.vcxproj:94` runs
+  `perl $(MPI_SRC_ROOT)\common\extracterrmsgs`. Strawberry Perl is
+  MinGW-based and excluded. The port needs a native Perl or an equivalent
+  Python generator with byte-identical output.
+- Components: `src/mpi/msmpi/*` (DLL, API, channels, MPID, IO, Fortran),
+  `src/mpi/mpiexec`, `src/mpi/smpd`, `src/mpi/pmilib`, `src/mpi/stub` and
+  `src/launchSvc`.
+
+Defect Driving The Fork
+=======================
+
+- Launch race (Observed): SESKA backend hosted run 38937044789,
+  `windows (opt)`, case `displacement-4-mumps`. With `mpiexec -debug 3`, the
+  manager logs `ERROR: rejecting unknown process id 3 trying to connect.`
+  right after `CreateProcess` of rank 0 (`PMI_SMPD_KEY=3`). The job is then
+  aborted ("process exited without calling init"); RPC 1726 on teardown is
+  only a consequence.
+- Source: `gle_create_mpi_process()` calls `ResumeThread(pi.hThread)`
+  (`src/mpi/smpd/smpd_launch_process.cpp:868`) and only after it returns
+  does the launch loop call `smpd_add_process(process)` (`:1338`). A rank
+  that reaches its PMI connect in that window fails
+  `smpd_find_process_by_id()` (`src/mpi/pmilib/SmpdMgrRpcSrv.cpp:439-445`).
+- Conditions: oversubscribed two-vCPU Windows Server 2022 runners, where
+  the launching thread competes with already-started ranks that busy-poll in
+  `MPI_Init`. 600 launches on a Windows 11 desktop (2 and 1 CPUs, 4 and 8
+  ranks, busy loops) did not reproduce it; a Server-like long-quantum A/B
+  test is in progress in the suite.
+- Staged remedy chosen by the user: (1) below-normal rank priority in the
+  SESKA launcher and CI now; (2) fix the ordering here (register before
+  resume), with a deterministic regression test, and ship this fork's runtime
+  app-locally.
+
+Build Progression
+=================
+
+| UTC | Outcome | Previous | Accepted | Counter | Profile | Evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-10-16 | Seed initialized; no build | none | 10.2.0.0 | 0 -> 0 | none | this note |
+
+Remaining Work
+==============
+
+1. Port the build to the pinned VS Build Tools and Windows SDK: replace CBT
+   and NuGet, the GFortran Fortran build (Intel `ifx`) and Perl generation
+   (native Perl or Python), without MinGW, MSYS2, Cygwin, WSL or Strawberry
+   Perl.
+2. Prove ABI compatibility with Microsoft MS-MPI 10.1.3 before changing
+   behavior.
+3. Fix the launch race with a deterministic regression test.
+4. Decide file-version identity, signing and licence notices (suite gap
+   G20), app-local runtime layout, and launcher/service behavior without an
+   installer.
+5. Requalify PETSc, its dependencies and SESKA against this fork's SDK and
+   runtime before adoption.
