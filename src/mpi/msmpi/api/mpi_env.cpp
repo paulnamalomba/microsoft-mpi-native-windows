@@ -1057,6 +1057,50 @@ MPI_Get_address(
 
 
 /*@
+  MPI_Aint_add - Returns the sum of a base address and a displacement
+
+  Input Parameters:
++ base - base address (integer)
+- disp - displacement (integer)
+
+  Notes:
+  MPI-3.1 section 4.1.5. Restores the API shipped in Microsoft MS-MPI 10.1.3,
+  whose public source predates it. The computation is address arithmetic and
+  cannot fail, so no error handler is invoked.
+@*/
+EXTERN_C
+MPI_Aint
+MPI_Aint_add(
+    _In_ MPI_Aint base,
+    _In_ MPI_Aint disp
+    )
+{
+    return reinterpret_cast<MPI_Aint>(reinterpret_cast<char*>(base) + disp);
+}
+
+
+/*@
+  MPI_Aint_diff - Returns the difference between two addresses
+
+  Input Parameters:
++ base - minuend address (integer)
+- disp - subtrahend address (integer)
+
+  Notes:
+  MPI-3.1 section 4.1.5. Parameter names follow Microsoft MS-MPI 10.1.3's mpi.h.
+@*/
+EXTERN_C
+MPI_Aint
+MPI_Aint_diff(
+    _In_ MPI_Aint base,
+    _In_ MPI_Aint disp
+    )
+{
+    return reinterpret_cast<char*>(base) - reinterpret_cast<char*>(disp);
+}
+
+
+/*@
   MPI_Get_processor_name - Gets the name of the processor
 
   Output Parameters:

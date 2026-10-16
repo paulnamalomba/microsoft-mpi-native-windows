@@ -1568,6 +1568,30 @@ PMPI_Get_address(
     _Out_ MPI_Aint* address
     );
 
+MPI_Aint
+MPI_Aint_add(
+    _In_ MPI_Aint base,
+    _In_ MPI_Aint disp
+    );
+
+MPI_Aint
+PMPI_Aint_add(
+    _In_ MPI_Aint base,
+    _In_ MPI_Aint disp
+    );
+
+MPI_Aint
+MPI_Aint_diff(
+    _In_ MPI_Aint base,
+    _In_ MPI_Aint disp
+    );
+
+MPI_Aint
+PMPI_Aint_diff(
+    _In_ MPI_Aint base,
+    _In_ MPI_Aint disp
+    );
+
 MPI_METHOD
 MPI_Type_size(
     _In_ MPI_Datatype datatype,

@@ -7139,6 +7139,46 @@ void FORT_CALL pmpi_get_address_ ( void*v1, MPI_Aint*v2, MPI_Fint *ierr )
 }
 
 //
+// mpi_aint_add
+//
+FORT_IMPORT MPI_Aint MSMPI_FORT_CALL mpi_aint_add__ ( MPI_Aint*v1, MPI_Aint*v2 ) ;
+
+MPI_Aint FORT_CALL mpi_aint_add_ ( MPI_Aint*v1, MPI_Aint*v2 )
+{
+    return mpi_aint_add__ (v1, v2);
+}
+
+//
+// pmpi_aint_add
+//
+FORT_IMPORT MPI_Aint MSMPI_FORT_CALL pmpi_aint_add__ ( MPI_Aint*v1, MPI_Aint*v2 ) ;
+
+MPI_Aint FORT_CALL pmpi_aint_add_ ( MPI_Aint*v1, MPI_Aint*v2 )
+{
+    return pmpi_aint_add__ (v1, v2);
+}
+
+//
+// mpi_aint_diff
+//
+FORT_IMPORT MPI_Aint MSMPI_FORT_CALL mpi_aint_diff__ ( MPI_Aint*v1, MPI_Aint*v2 ) ;
+
+MPI_Aint FORT_CALL mpi_aint_diff_ ( MPI_Aint*v1, MPI_Aint*v2 )
+{
+    return mpi_aint_diff__ (v1, v2);
+}
+
+//
+// pmpi_aint_diff
+//
+FORT_IMPORT MPI_Aint MSMPI_FORT_CALL pmpi_aint_diff__ ( MPI_Aint*v1, MPI_Aint*v2 ) ;
+
+MPI_Aint FORT_CALL pmpi_aint_diff_ ( MPI_Aint*v1, MPI_Aint*v2 )
+{
+    return pmpi_aint_diff__ (v1, v2);
+}
+
+//
 // mpi_wtime
 //
 FORT_IMPORT double MSMPI_FORT_CALL mpi_wtime__ ( void ) ;

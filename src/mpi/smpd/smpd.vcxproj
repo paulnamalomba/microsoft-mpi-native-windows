@@ -90,5 +90,11 @@
     <OutFileType>*.exe</OutFileType>
   </PropertyGroup>
 
+  <!-- MSMPI_NATIVE: match the export-suppressed CFG of Microsoft MS-MPI 10.1.3 binaries (guard flags 0x1001F500). -->
+  <ItemDefinitionGroup Condition=" '$(MSMPI_NATIVE)' == 'true' ">
+    <Link>
+      <AdditionalOptions>/guard:exportsuppress %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+  </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

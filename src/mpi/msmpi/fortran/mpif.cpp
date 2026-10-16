@@ -3808,6 +3808,18 @@ void MSMPI_FORT_CALL mpi_get_address__ ( void*v1, MPI_Aint*v2, MPI_Fint *ierr )
 }
 
 
+MPI_Aint MSMPI_FORT_CALL mpi_aint_add__ ( MPI_Aint*v1, MPI_Aint*v2 )
+{
+    return MPI_Aint_add( *v1, *v2 );
+}
+
+
+MPI_Aint MSMPI_FORT_CALL mpi_aint_diff__ ( MPI_Aint*v1, MPI_Aint*v2 )
+{
+    return MPI_Aint_diff( *v1, *v2 );
+}
+
+
 double MSMPI_FORT_CALL mpi_wtime__ ( void )
 {
     return MPI_Wtime();

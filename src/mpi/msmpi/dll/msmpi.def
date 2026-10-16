@@ -363,6 +363,10 @@ EXPORTS
     PMPI_Get_accumulate=MPI_Get_accumulate
     MPI_Get_address
     PMPI_Get_address=MPI_Get_address
+    MPI_Aint_add
+    PMPI_Aint_add=MPI_Aint_add
+    MPI_Aint_diff
+    PMPI_Aint_diff=MPI_Aint_diff
     MPI_Get_count
     PMPI_Get_count=MPI_Get_count
     MPI_Get_elements
@@ -1903,6 +1907,22 @@ EXPORTS
     pmpi_get_address_=mpi_get_address__                      PRIVATE
     MPI_GET_ADDRESS=mpi_get_address__                        PRIVATE
     PMPI_GET_ADDRESS=mpi_get_address__                       PRIVATE
+    mpi_aint_add__
+    pmpi_aint_add__=mpi_aint_add__
+    pmpi_aint_add=mpi_aint_add__                             PRIVATE
+    mpi_aint_add=mpi_aint_add__                              PRIVATE
+    mpi_aint_add_=mpi_aint_add__                             PRIVATE
+    pmpi_aint_add_=mpi_aint_add__                            PRIVATE
+    MPI_AINT_ADD=mpi_aint_add__                              PRIVATE
+    PMPI_AINT_ADD=mpi_aint_add__                             PRIVATE
+    mpi_aint_diff__
+    pmpi_aint_diff__=mpi_aint_diff__
+    pmpi_aint_diff=mpi_aint_diff__                           PRIVATE
+    mpi_aint_diff=mpi_aint_diff__                            PRIVATE
+    mpi_aint_diff_=mpi_aint_diff__                           PRIVATE
+    pmpi_aint_diff_=mpi_aint_diff__                          PRIVATE
+    MPI_AINT_DIFF=mpi_aint_diff__                            PRIVATE
+    PMPI_AINT_DIFF=mpi_aint_diff__                           PRIVATE
     mpi_get_count__
     pmpi_get_count__=mpi_get_count__
     pmpi_get_count=mpi_get_count__                           PRIVATE

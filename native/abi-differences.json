@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "rule": "Each accepted difference from Microsoft MS-MPI 10.1.3 names its check, side and reason. Everything else must match.",
+  "explained": {
+    "SDK header contents": {
+      "differing": {
+        "mspms.h": "Upstream commit 12244d3 (2019-12-29) adds a guarded block (ADDRESS_FAMILY/SOCKADDR_INET and SAL fallbacks) for MinGW GCC <= 5.1 headers. It is inactive for MSVC and Intel compilers, which define _WS2IPDEF_ and the SAL macros; Microsoft's 10.1.3 SDK predates or omits it.",
+        "pmidbg.h": "The comment header block differs only in its copyright/licence lines (the public repository adds the MIT licence line); declarations are identical."
+      }
+    }
+  }
+}

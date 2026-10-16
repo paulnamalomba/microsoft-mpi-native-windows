@@ -273,3 +273,54 @@ against Microsoft's 10.1.3 SDK import library.
 Open: the library string and file-version identity (it reports upstream
 10.1.12498.16 and PRE-RELEASE) are part of the release identity decision.
 No accepted build.
+
+Phase 4: ABI and hardening parity with Microsoft MS-MPI 10.1.3
+=============================================================
+
+Version progression: none. The accepted version remains 10.2.0.0; build
+counter 0 -> 0. Phase 4 changes behavior (adds API), so acceptance waits for
+the full required checks, including phase 5.
+
+Parity checker native/check_abi.py, using the pinned dumpbin, against
+System32 msmpi.dll 10.1.12498.52, Program Files\Microsoft MPI\Bin and the
+installed 10.1.3 SDK:
+- Initial run: 60 unexplained differences. 20 msmpi.dll exports (the
+  MPI_Aint_add/diff family in C, PMPI and Fortran casings); in msmpifec.lib
+  and msmpifmc.lib, 4 defined externals and 14 weak aliases each for the
+  same family; mpiexec.exe/smpd.exe guard flags 0x10017500 against
+  Microsoft's 0x1001F500 (missing IMAGE_GUARD_CF_ENABLE_EXPORT_SUPPRESSION);
+  mpiwarning.h staged in the SDK, which Microsoft does not ship; mpi.h,
+  mspms.h and pmidbg.h content.
+- Restored API, following the existing MPI_Get_address/MPI_WTIME patterns:
+  src/mpi/msmpi/api/mpi_env.cpp MPI_Aint_add/MPI_Aint_diff (MPI-3.1 address
+  arithmetic; cannot fail, so no error handler); src/include/mpi.h
+  declarations spliced byte for byte from the 10.1.3 SDK, after which the
+  header is identical when CRLF-normalized; msmpi.def C/PMPI exports and the
+  Fortran mpi_aint_{add,diff}__ implementations with their nine casing
+  aliases (PRIVATE where upstream uses PRIVATE); src/mpi/msmpi/fortran/mpif.cpp
+  DLL Fortran implementations (pure arithmetic, so no MPIR_F_MPI_BOTTOM
+  adjustment); mpifbind.cpp import-library wrappers mpi_/pmpi_aint_{add,diff}_;
+  and 14 alias lines in amd64.cdecl.alias and amd64.stdcall.alias (@8) at
+  Microsoft's position, after pmpi_get_address__ and before MPI_WTIME.
+- Hardening: native-gated /guard:exportsuppress for mpiexec.exe and
+  smpd.exe; guard flags now 0x1001F500, as Microsoft's are. msmpi.dll was
+  already 0x10017500, equal to Microsoft's. Both sides have ASLR,
+  high-entropy VA, NX and CFG; neither is CET-compatible.
+- SDK staging: binplace.proj excludes mpiwarning.h natively; no shipped
+  header includes it.
+- Documented differences (native/abi-differences.json): mspms.h carries the
+  upstream MinGW-compatibility block, which is inactive for MSVC/Intel;
+  pmidbg.h differs only in its comment header.
+- Result: 0 unexplained differences. All 2,220 msmpi.dll export names match;
+  the Fortran import libraries match in defined externals and weak aliases;
+  headers match apart from the two documented files.
+
+Functional verification, native/verify.py (out/native-verify/20261016T220100Z):
+the app-local runtime is staged in a fresh directory; native/tests/probes/
+aint_check.c (cl /MD /W4, msmpi.lib) and aint_check.f90 (ifx /libs:dll, with
+mpif.h, msmpifec.lib and msmpi.lib) are built against the fork SDK and run at
+1, 2 and 4 ranks. 8 of 8 checks pass, including the C and PMPI forms, the
+Fortran aliases MPI_AINT_ADD/MPI_AINT_DIFF, and rank 0 loading the staged
+msmpi.dll.
+Open: CPU-set affinity (10.1.3) is not restored. SESKA does not enable
+affinity; reimplement it or declare it unsupported before release.
