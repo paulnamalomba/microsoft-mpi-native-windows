@@ -130,3 +130,63 @@ Remaining Work
    installer.
 5. Requalify PETSc, its dependencies and SESKA against this fork's SDK and
    runtime before adoption.
+
+Phase 1 progress: pinned environment, CBT gate, baseline inventory
+==================================================================
+
+Version progression: none. The accepted version remains 10.2.0.0; build
+counter 0 -> 0. A port baseline is a diagnostic, never an accepted build.
+
+- `native/toolchain-pins.json`: the PETSc fork's verified VS Build Tools
+  17.14.37411.7 (toolset 14.44.35207), Windows SDK 10.0.26100.0 and Intel ifx
+  2026.1.1 entries, byte-identical, with provenance (petsc-native-windows
+  b110b88, config/native_windows/toolchain-pins.json SHA-256
+  928cf7c6cf59b651710ea0a556f649c5e56b35f363b733d911f1922eb59cf3d2), plus
+  Microsoft MS-MPI 10.1.3 runtime/SDK as the phase-4 parity reference.
+- `native/environment.py`: captures vcvars64.bat plus Intel setvars.bat,
+  strips Cygwin/MSYS/MinGW/Strawberry/Git-usr paths and compiler overrides,
+  and verifies the VS instance, toolset, SDK, installed-file hashes and tool
+  locations (cl, link, lib, dumpbin, midl, mc, rc, ifx, MSBuild). It removes
+  NoDefaultCurrentDirectoryInExePath only for the vendor-script session:
+  Intel setvars.bat calls component vars.bat by relative name, and with that
+  variable set every component fails while setvars still exits 0. It fails
+  with a specific error when ONEAPI_ROOT/CMPLR_ROOT are absent. Verified in a
+  shell that sets the variable: all tools resolve inside the pinned installs;
+  cl.exe SHA-256 88c8344236a27a6e727e0a8edc49aaa2690bdc7a9464b9d18cc7abe70a9f1c0d
+  equals the PETSc pin.
+- `Directory.Build.props`: the CBT import is skipped when MSMPI_NATIVE=true,
+  so a native build loads no CBT.Core.dll and restores no NuGet modules.
+  Without the property, upstream behavior is unchanged.
+- `native/build.py baseline`: expands upstream dirs.proj into 22 projects and
+  builds each with MSBuild global properties MSMPI_NATIVE=true,
+  Configuration=Release, Platform=x64, PlatformToolset=v143,
+  VCToolsVersion=14.44.35207, WindowsTargetPlatformVersion=10.0.26100.0.
+  It continues after failures and writes out/native-baseline/<UTC>/summary.json.
+- `native/tests/test_environment.py`: 3 tests pass (vendor-session guard,
+  excluded-path filtering, traversal order).
+
+Baseline 20261016T211234Z: 8 of 22 projects built (binplace, launchSvc MC,
+traceManifest, mpi_debugger, mpiio, pmicli, pmilib, mpistub). All 14 failures
+trace to four missing generated inputs, not to source incompatibility with
+the modern toolset:
+
+1. defmsg.h: the Perl extracterrmsgs step did not run; upstream ignores its
+   exit code. Port extracterrmsgs and parse.sub (799 and 228 lines) to Python
+   and verify against message strings in Microsoft's msmpi.dll 10.1.3.
+2. MpiTraceEvents.h (and the launch-service message header): traceManifest
+   and msmpiLaunchSvcMc use PlatformToolset WindowsUserModeDriver10.0 (the
+   WDK toolset that supplies MessageCompile). The global v143 override
+   skipped the step and the project still exited 0. The driver will run the
+   pinned SDK mc.exe directly (-um -p Trace -P EVENT_ -z MpiTraceEvents -h/-r),
+   so no WDK is needed.
+3. setbotf.f: mingw-w64 gfortran is excluded. It defines MPIRINITF and the
+   common blocks MPIPRIV1, MPIPRIV2, MPIFCMB5, MPIFCMB9 and MPIPRIVC, and calls
+   MPIRINITC/MPIRINITC2 with CHARACTER arguments. Compile it with ifx so that
+   lowercase undecorated names, common-block sizes and trailing hidden
+   lengths match gfortran -fno-underscoring, with no Intel default-library
+   directives.
+4. amd64.{cdecl,stdcall}: upstream echoes an empty C file into a not-yet-
+   created x64\Release directory and runs the internal aliasobj, both with
+   IgnoreExitCode. Gate those targets off natively and emit the COFF alias
+   objects (weak externals, IMAGE_WEAK_EXTERN_SEARCH_ALIAS) from the .alias
+   files with a Python writer; check parity against Microsoft's msmpifec.lib.
