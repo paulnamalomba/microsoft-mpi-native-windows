@@ -603,10 +603,12 @@ gle_create_mpi_process(
     _In_ HANDLE hStdout,
     _In_ HANDLE hStderr,
     _In_ bool   shortPath,
+    _Out_ bool* pResumeAfterRegistration,
     _When_(return != NOERROR, _Out_) SmpdLaunchRes* pLaunchRes
 )
 {
     DWORD gle = NOERROR;
+    *pResumeAfterRegistration = false;
     STARTUPINFOEXW si;
     memset(&si, 0, sizeof(si));
     si.StartupInfo.cb = sizeof(si);
@@ -863,10 +865,13 @@ gle_create_mpi_process(
         &pi,
         &bSuspendResume);
 
-    if (bSuspendResume == FALSE)
-    {
-        ResumeThread(pi.hThread);
-    }
+    //
+    // Leave the primary thread suspended. The caller resumes it only after
+    // smpd_add_process(): a rank that reaches its PMI connect before it is
+    // registered is rejected by smpd_find_process_by_id() and the job aborts.
+    // A debugger extension that requested suspension keeps ownership of resume.
+    //
+    *pResumeAfterRegistration = (bSuspendResume == FALSE);
 
     process->pid = pi.dwProcessId;
     if (pAffinity != nullptr)
@@ -962,6 +967,25 @@ smpd_next_proc_affinity(
 
     return &pContext->affinityList[i++];
 }
+
+
+#if defined(MSMPI_NATIVE_LAUNCH_TEST)
+//
+// Verification-only helper: a decimal environment value, or 0 when unset.
+//
+static DWORD
+LaunchTestValue(
+    _In_z_ const wchar_t* name
+    )
+{
+    wchar_t value[16];
+    if( MPIU_Getenv( name, value, _countof(value) ) != NOERROR )
+    {
+        return 0;
+    }
+    return wcstoul( value, nullptr, 10 );
+}
+#endif
 
 
 static
@@ -1310,6 +1334,7 @@ smpd_launch_processes(
             }
         }
 
+        bool resumeAfterRegistration = false;
         gle = gle_create_mpi_process(
             process,
             &pldHelper,
@@ -1319,6 +1344,7 @@ smpd_launch_processes(
             hPipe[siOut],
             hPipe[siErr],
             useShortPath,
+            &resumeAfterRegistration,
             pLaunchRes
             );
         if( gle != NO_ERROR )
@@ -1332,11 +1358,44 @@ smpd_launch_processes(
             break;
         }
 
+#if defined(MSMPI_NATIVE_LAUNCH_TEST)
         //
-        // Save the new process to the process list
+        // Verification-only build (native\verify.py; never shipped). The legacy
+        // order resumes before registration, as upstream did, and the delay widens
+        // the window so the sensitivity control reproduces the rejection.
+        //
+        if( LaunchTestValue( L"MSMPI_NATIVE_TEST_LEGACY_ORDER" ) != 0 && resumeAfterRegistration )
+        {
+            ResumeThread( process->wait.hThread );
+            resumeAfterRegistration = false;
+            Sleep( LaunchTestValue( L"MSMPI_NATIVE_TEST_RESUME_DELAY_MS" ) );
+        }
+#endif
+
+        //
+        // Register the process before its primary thread runs, so its PMI connect
+        // always finds it (smpd_find_process_by_id), then resume it.
         //
         smpd_add_process( process );
         smpd_close_std_pipes( hPipe );
+        if( resumeAfterRegistration &&
+            ResumeThread( process->wait.hThread ) == static_cast<DWORD>(-1) )
+        {
+            gle = GetLastError();
+            smpd_err_printf(L"Resuming rank %hu %s>%s %s failed, error %u\n",
+                            pld->rankArray[i], pld->wdir, pld->appExe, pld->appArgs, gle);
+            FillErrorMsg( pld, appExe, gle, pLaunchRes );
+            KillFailedLaunchBlock( prevProc );
+
+            break;
+        }
+
+#if defined(MSMPI_NATIVE_LAUNCH_TEST)
+        if( LaunchTestValue( L"MSMPI_NATIVE_TEST_LEGACY_ORDER" ) == 0 )
+        {
+            Sleep( LaunchTestValue( L"MSMPI_NATIVE_TEST_RESUME_DELAY_MS" ) );
+        }
+#endif
     }
     if (pHPCAffinity != nullptr)
     {

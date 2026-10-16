@@ -324,3 +324,28 @@ Fortran aliases MPI_AINT_ADD/MPI_AINT_DIFF, and rank 0 loading the staged
 msmpi.dll.
 Open: CPU-set affinity (10.1.3) is not restored. SESKA does not enable
 affinity; reimplement it or declare it unsupported before release.
+
+Phase 5: launch-race fix and deterministic regression test
+==========================================================
+
+Version progression: none (10.2.0.0; counter 0 -> 0). Acceptance requires
+the full declared checks and downstream requalification.
+
+- src/mpi/smpd/smpd_launch_process.cpp: gle_create_mpi_process() no longer
+  calls ResumeThread. It reports through *pResumeAfterRegistration whether the
+  caller must resume (false when a PMI debugger extension requested
+  suspension). The launch loop calls smpd_add_process() first and only then
+  resumes the primary thread, so a rank's PMI connect always finds its
+  registration in smpd_find_process_by_id(). A ResumeThread failure now kills
+  the launch block with an error; upstream ignored the return value.
+- A test-only block (#if MSMPI_NATIVE_LAUNCH_TEST, never in shipped builds)
+  reads MSMPI_NATIVE_TEST_RESUME_DELAY_MS and MSMPI_NATIVE_TEST_LEGACY_ORDER.
+- native/verify.py builds that variant as Release in a disposable copy of the
+  source tree and runs it with the release mpiexec.exe and msmpi.dll.
+  Run out/native-verify/20261016T220621Z: 11 of 11 checks pass.
+  Fixed order, 5 four-rank launches with a 300 ms post-resume delay: all exit
+  0, with no rejection. Sensitivity control, legacy order with the same
+  delay: 3 of 3 launches fail with "ERROR: rejecting unknown process id N
+  trying to connect.", reproducing hosted run 38937044789 deterministically.
+- Found: the Debug configuration's smpd.exe fail-fasts at startup
+  (0xC0000409). Release is unaffected. Investigate before supporting Debug.

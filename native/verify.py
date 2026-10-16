@@ -49,6 +49,65 @@ class Recorder:
         return record
 
 
+REJECTION = 'rejecting unknown process id'
+LAUNCH_DELAY_MS = '300'
+
+
+def LaunchRegistration(identity, environment, work, runtime, probe, recorder, Check):
+    """Deterministic regression test for registering ranks before they can connect.
+
+    A Release smpd.exe compiled with MSMPI_NATIVE_LAUNCH_TEST in a disposable copy
+    of the source tree (its own intermediates and staging; never shipped) sleeps
+    after resuming each rank, which widens the window far beyond rank startup time.
+    With the fixed order every launch must succeed. The legacy-order sensitivity
+    control must reproduce the original rejection, proving the test can see the
+    defect.
+    """
+    import importlib.util
+    tree = work / 'launch-test-tree'
+    shutil.copytree(ROOT, tree, ignore=shutil.ignore_patterns('.git', 'out', 'x64', 'Release', 'Debug', '__pycache__'))
+    spec = importlib.util.spec_from_file_location('launch_test_build', tree / 'native' / 'build.py')
+    build = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(build)
+    generated = build.Generate(identity, environment, 'Release', work)
+    smpd = build.ROOT / 'src/mpi/smpd/smpd.vcxproj'
+    properties = build.GlobalProperties('Release')
+    test_environment = dict(environment, CL='/DMSMPI_NATIVE_LAUNCH_TEST')
+    log = work / 'launch-test-smpd-build.log'
+    built = recorder.Run('build-launch-test-smpd', [identity['tools']['msbuild']['path'], smpd, '/nologo', '/nr:false', '/m:1',
+                                                    '/v:minimal', f'/flp:LogFile={log};Verbosity=normal;Encoding=UTF-8',
+                                                    *[f'/p:{key}={value}' for key, value in properties.items()]],
+                         build.ROOT, timeout=3600, env=test_environment)
+    test_smpd = build.ROOT / 'out/Release-x64/bin/smpd.exe'
+    Check('build MSMPI_NATIVE_LAUNCH_TEST smpd (Release, disposable source copy)', built['exit_code'] == 0 and test_smpd.is_file(),
+          built['stdout'][-600:])
+    if built['exit_code'] != 0 or not test_smpd.is_file():
+        return
+    staged = work / 'runtime-launch-test'
+    staged.mkdir()
+    for name in ('msmpi.dll', 'mpiexec.exe'):
+        shutil.copy2(runtime / name, staged / name)
+    shutil.copy2(test_smpd, staged / 'smpd.exe')
+    shutil.copy2(probe, staged / probe.name)
+    for order, launches, expect_success in (('fixed', 5, True), ('legacy', 3, False)):
+        variables = dict(environment, MSMPI_NATIVE_TEST_RESUME_DELAY_MS=LAUNCH_DELAY_MS,
+                         MSMPI_NATIVE_TEST_LEGACY_ORDER='1' if order == 'legacy' else '0')
+        outcomes = []
+        for attempt in range(launches):
+            result = recorder.Run(f'launch-{order}-{attempt}', [staged / 'mpiexec.exe', '-debug', '3', '-n', '4', staged / probe.name],
+                                  staged, timeout=180, env=variables)
+            rejected = REJECTION in result['stderr'] or REJECTION in result['stdout']
+            succeeded = result['exit_code'] == 0 and 'AINT_C ranks=4 passed=4' in result['stdout']
+            outcomes.append(dict(attempt=attempt, exit_code=result['exit_code'], succeeded=succeeded, rejected=rejected))
+        if expect_success:
+            Check(f'registration before resume: {launches} four-rank launches with a {LAUNCH_DELAY_MS} ms resume delay',
+                  all(o['succeeded'] and not o['rejected'] for o in outcomes), outcomes)
+        else:
+            Check(f'sensitivity control: legacy order reproduces "{REJECTION}" in {launches} of {launches} launches',
+                  all(o['rejected'] and not o['succeeded'] for o in outcomes), outcomes)
+    return generated
+
+
 def Main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--build', type=Path, default=ROOT / 'out/Release-x64/bin')
@@ -91,6 +150,8 @@ def Main():
             marker = f'AINT_FORTRAN ranks={ranks} passed={ranks} PASS'
             Check(f'Fortran MPI_AINT_ADD/DIFF at {ranks} ranks', result['exit_code'] == 0 and marker in result['stdout'],
                   result['stdout'][-400:] + result['stderr'][-400:])
+    if built_c['exit_code'] == 0:
+        LaunchRegistration(identity, environment, work, runtime, c_exe, recorder, Check)
     summary = dict(kind='native-verify', accepted=False, utc=stamp, build=str(build),
                    runtime={name: Sha256(runtime / name) for name in RUNTIME}, checks=checks,
                    passed=sum(check['passed'] for check in checks), failed=[c['check'] for c in checks if not c['passed']],
