@@ -251,3 +251,25 @@ Drift found against Microsoft 10.1.3 (to restore for ABI parity in phase 4):
 - mpif.h, mpi.f90 and mpio.h are identical to the 10.1.3 SDK. pmidbg.h
   differs only in its comment header. mspms.h differs only by the
   source's guarded MinGW compatibility block.
+
+Smoke test of the native runtime (diagnostic, not qualification)
+================================================================
+
+Directory: copies of out/Release-x64/bin mpiexec.exe, smpd.exe and msmpi.dll
+beside PETSc fork probes from the b5a28e9 debug kit, which were linked
+against Microsoft's 10.1.3 SDK import library.
+- `mpiexec.exe -n {1,2,4} mpi_interop.exe`: exit 0 each, with
+  NATIVE_MPI_INTEROP ranks=1 sum=1, ranks=2 sum=3, ranks=4 sum=10 PASS
+  (C/Fortran collectives, special constants, communicator conversion).
+- `mpiexec -debug 3` shows the manager launched from the same directory:
+  smpd_get_smpd_exec_path() checks the executable's own directory before
+  the registry InstallRoot.
+- `mpiexec.exe -n 2 mumps-direct.exe` (MUMPS with oneMKL ScaLAPACK and
+  mkl_blacs_msmpi_lp64): exit 0, error 1.32e-16, residual 2.66e-16 PASS.
+- whichmpi.c (MPI_Get_library_version plus GetModuleFileName): rank 0 reports
+  "Microsoft MPI 10.1.12498.16 [PRE-RELEASE]", loaded from the app-local
+  directory, not System32's 10.1.12498.52. An app-local runtime therefore
+  takes precedence over an installed MS-MPI.
+Open: the library string and file-version identity (it reports upstream
+10.1.12498.16 and PRE-RELEASE) are part of the release identity decision.
+No accepted build.
