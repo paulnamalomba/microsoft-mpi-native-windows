@@ -14,6 +14,15 @@ The findings were observed at base `f2d849f`.
 | Fortran objects | `src/mpi/msmpi/fortran/lib/mpifort.vcxproj` runs mingw-w64 `gfortran.exe -fno-underscoring` on `setbotf.f` | MinGW is excluded. |
 | Fortran symbol aliases | `src/mpi/msmpi/fortran/fortran.props` runs `$(PUBLIC_RAZZLE_TOOLS)\amd64\aliasobj` on `amd64.{cdecl,stdcall}.alias` (2,494 and 2,598 `alias <name> <target>` lines) | `aliasobj` is a Microsoft-internal tool that is not in the repository. The step also runs with `IgnoreExitCode="true"`, so a public build silently omits the aliases. |
 
+## Source is older than Microsoft's 10.1.3 binaries
+
+Microsoft's pinned 10.1.3 runtime is file version `10.1.12498.52`. The public source declares `10.1.12498.16` (`v10.1.1`, September 2019). Since `v10.1.1` the repository received only three changes: a README update, `src/include/mspms.h` compatibility for MinGW GCC up to 5.1, and a one-line fix in `src/mpi/msmpi/mpid/DynProcServer.cpp`. Microsoft's [release notes](https://learn.microsoft.com/en-us/message-passing-interface/microsoft-mpi-release-notes) list two later releases that are not in the source:
+
+- **10.1.2** (`10.1.12498.18`): signed benchmark executables and binaries built to satisfy APIScan. The fork's build must apply equivalent hardening (control-flow guard, `/GS`, ASLR with high-entropy VA, CET compatibility) and compare DLL/EXE characteristics against Microsoft's binaries in phase 4.
+- **10.1.3** (`10.1.12498.52`): worker-process affinities on Windows 11 and Windows Server 2022 are assigned through CPU sets, not affinity masks. No CPU-set API appears in the source. SESKA runs with MS-MPI's default of no affinity, but the fork must either reimplement this or document affinity as unsupported before release.
+
+Microsoft lists no security fix for either release. That absence is not proof that none exists; re-check Microsoft's security update guide before release.
+
 ## Phases
 
 1. **Pinned environment and CBT gate.** Add a fork-owned toolchain pin file and vendor-environment capture. Remove `NoDefaultCurrentDirectoryInExePath` only for the vendor-script session, because Intel `setvars.bat` needs it absent. Gate the CBT import behind a native-build property and drive the `.vcxproj` projects in dependency order with toolset `v143` and the pinned SDK. The upstream path stays unchanged when the property is unset.
