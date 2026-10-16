@@ -13,7 +13,14 @@
     <PropertyGroup Condition="'$(BuildArchitecture)'=='amd64'">
       <Fort_Flags>-fno-underscoring -D_WIN64 -D_AMD64_ -DAMD64</Fort_Flags>
     </PropertyGroup>
-    <Exec Command="$(GFORTRAN_BIN)\gfortran.exe -I$(MPI_INC_ROOT) -c %(ForCompile.Identity) $(Fort_Flags)  -o $(O)\%(ForCompile.FileName).obj" />
+    <Exec Condition=" '$(MSMPI_NATIVE)' != 'true' " Command="$(GFORTRAN_BIN)\gfortran.exe -I$(MPI_INC_ROOT) -c %(ForCompile.Identity) $(Fort_Flags)  -o $(O)\%(ForCompile.FileName).obj" />
+    <!--
+      MSMPI_NATIVE: the pinned Intel ifx replaces mingw-w64 gfortran. The flags reproduce gfortran -fno-underscoring
+      external and common-block names (lowercase, no underscore), keep gfortran's unoptimized default, and omit
+      default-library directives so consumers of the import libraries inherit no Intel runtime dependency.
+    -->
+    <MakeDir Condition=" '$(MSMPI_NATIVE)' == 'true' " Directories="$(O)" />
+    <Exec Condition=" '$(MSMPI_NATIVE)' == 'true' " Command="ifx.exe /nologo /c /Od /names:lowercase /assume:nounderscore /libdir:none /I$(MPI_INC_ROOT) %(ForCompile.Identity) /object:$(O)\%(ForCompile.FileName).obj" />
     <ItemGroup>
       <Lib Condition="'$(ConfigurationType)'=='StaticLibrary'" Include="@(ForCompile->'$(O)\%(Filename).obj')" />
     </ItemGroup>

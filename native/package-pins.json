@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "selection_date": "2026-10-16",
+  "rule": "Upstream projects declare these as NuGet PackageReference items that CBT restored. The native driver downloads exactly these bytes, verifies size and SHA-512, and imports the package targets only into projects that reference them.",
+  "packages": {
+    "NetworkDirect": {
+      "version": "2.0.1",
+      "url": "https://api.nuget.org/v3-flatcontainer/networkdirect/2.0.1/networkdirect.2.0.1.nupkg",
+      "bytes": 467038,
+      "sha512_base64": "l+SKspPBZKgKPtnlHx+fWuhcB+6RxJlQp2tIZWfS5QNGojebgoT/y519L+cPdu/5RV3OdAz50+DBuDEA4lFoqA==",
+      "sha256": "3487c4f7c4cff89a5b3c515fcd77313f2771dbc2f54982c4060405906c95add5",
+      "catalog": "https://api.nuget.org/v3/catalog0/data/2018.11.06.23.42.15/networkdirect.2.0.1.json",
+      "source_project": "https://github.com/Microsoft/NetworkDirect",
+      "targets": "build/NetworkDirect.targets",
+      "contents": "include/{nddef,ndioctl,ndspi,ndstatus,ndsupport}.h and prebuilt lib/{x64,Win32}/ndutil.lib",
+      "follow_up": "ndutil.lib is a 2018 prebuilt binary. Build it from microsoft/NetworkDirect source at a pinned commit before release."
+    }
+  }
+}

@@ -21,7 +21,9 @@
     <CL_Exe>cl.exe</CL_Exe>
   </PropertyGroup>
 
+  <!-- MSMPI_NATIVE: native\build.py compiles the empty C file with the pinned cl.exe and runs native\aliasobj.py. -->
   <Target Name="GenerateEmptyCFile"
+          Condition=" '$(MSMPI_NATIVE)' != 'true' "
           BeforeTargets="ClCompile"
           Inputs="..\$(BuildArchitecture).$(CallingConvention).alias"
           Outputs="$(O)\$(BuildArchitecture).$(CallingConvention).obj">
@@ -31,6 +33,7 @@
   </Target>
 
   <Target Name="EditAlias"
+          Condition=" '$(MSMPI_NATIVE)' != 'true' "
           AfterTargets="ClCompile"
           Inputs="..\$(BuildArchitecture).$(CallingConvention).alias;$(O)\$(BuildArchitecture).$(CallingConvention).obj"
           Outputs="$(OutDir)\$(TargetName).lib">

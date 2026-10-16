@@ -73,7 +73,9 @@ if not %rc%==1 exit %rce% else exit 0</Command>
   <!-- Note that the input of this target is not just extracterrmsgs/errnames but rather
        all of the core code base's C/CPP files. To ensure correct rebuild, we
        will need to manually build this target if there are additional error messages -->
+  <!-- MSMPI_NATIVE: native\build.py runs native\extracterrmsgs.py (a Python port) before MSBuild and fails on its errors. -->
   <Target Name="GenerateMPIErrorFiles"
+          Condition=" '$(MSMPI_NATIVE)' != 'true' "
           BeforeTargets="BeforeClCompile"
           Inputs="$(MPI_SRC_ROOT)\common\extracterrmsgs;$(MPI_SRC_ROOT)\common\errnames.txt"
           Outputs="$(O)\defmsg.h">
