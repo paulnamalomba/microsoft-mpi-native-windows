@@ -32,4 +32,4 @@ Microsoft lists no security fix for either release. That absence is not proof th
 5. **Launch-race fix.** Register each rank (`smpd_add_process`) before `ResumeThread` in `smpd_launch_process.cpp`. Add a deterministic regression test that widens the window and proves an early rank connect is accepted, plus repeated multi-rank launches under restricted CPU masks.
 6. **Packaging and downstream.** Produce an app-local runtime (`msmpi.dll`, `mpiexec.exe`, `smpd.exe`) and an SDK. Decide file-version identity, signing and licence notices. Requalify the PETSc fork, MUMPS, SuperLU_DIST, oneMKL BLACS and SESKA before SESKAFEA adopts it.
 
-A build that passes phases 1–4 may be accepted as `10.2.0.1` with that scope recorded. Behavior changes (phase 5) follow as later builds.
+Phases 1–5 are complete. The first accepted build, `10.1.4.1`, also needs the version identity, the Debug-configuration fix, ndutil built from source and hosted CI (phase 6). CPU-set affinity follows as `10.1.4.2`.

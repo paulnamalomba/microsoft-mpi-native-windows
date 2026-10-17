@@ -349,3 +349,11 @@ the full declared checks and downstream requalification.
   trying to connect.", reproducing hosted run 38937044789 deterministically.
 - Found: the Debug configuration's smpd.exe fail-fasts at startup
   (0xC0000409). Release is unaffected. Investigate before supporting Debug.
+
+Family closed: superseded unbuilt seed (2026-10-17)
+===================================================
+
+The user replaced the unbuilt seed 10.2.0.0 with 10.1.4.0 (single-digit
+major, minor and build; first accepted build 10.1.4.1). No build was
+accepted in this family, so the counter ends at 10.2.0.0 with 0 -> 0. The
+records above stay as written. Work continues in .commits/10.1.4.txt.

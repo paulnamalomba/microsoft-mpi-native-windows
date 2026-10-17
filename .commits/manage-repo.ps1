@@ -100,7 +100,7 @@ try {
     }
     $null = Invoke-Git -Arguments @('rev-parse','--show-toplevel')
     $script:AcceptedVersion = (Get-Content -LiteralPath (Join-Path $script:RepoRoot $script:VersionFile) -Raw).Trim()
-    if ($script:AcceptedVersion -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d?)\.([0-9])\.(0|[1-9]\d?)$') {
+    if ($script:AcceptedVersion -notmatch '^(0|[1-9]\d*)\.([0-9])\.([0-9])\.([0-9])$') {
         throw 'Invalid canonical bounded four-part version'
     }
     if ($Version -and $Version -ne $script:AcceptedVersion) { throw "-Version must equal $script:VersionFile ($script:AcceptedVersion)" }
