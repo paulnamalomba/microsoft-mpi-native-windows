@@ -82,8 +82,11 @@
     <ClCompile Include=".\smpd_host_util.cpp" />
   </ItemGroup>
 
-  <!-- MSMPI_NATIVE: match the export-suppressed CFG of Microsoft MS-MPI 10.1.3 binaries (guard flags 0x1001F500). -->
-  <ItemDefinitionGroup Condition=" '$(MSMPI_NATIVE)' == 'true' ">
+  <!-- MSMPI_NATIVE: match the export-suppressed CFG of Microsoft MS-MPI 10.1.3 binaries (guard flags 0x1001F500).
+       Release only: upstream compiles with /guard:cf only in Release (src/mpi.props), and this linker option enables CFG,
+       so applying it to Debug produced a CFG image whose static initializers were not valid call targets
+       (__fastfail FAST_FAIL_GUARD_ICALL_CHECK_FAILURE in the CRT's _initterm at startup). -->
+  <ItemDefinitionGroup Condition=" '$(MSMPI_NATIVE)' == 'true' And '$(Configuration)' == 'Release' ">
     <Link>
       <AdditionalOptions>/guard:exportsuppress %(AdditionalOptions)</AdditionalOptions>
     </Link>

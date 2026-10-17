@@ -123,3 +123,45 @@ candidate; acceptance stays a separate step.
   20261017T050148Z 22/22; verify 20261017T050315Z 16/16 (11 earlier checks
   plus 3 VERSIONINFO, library string and banner); check_abi exit 0, with 0
   unexplained differences.
+
+Debug-configuration fail-fast: root cause and fix (toward 10.1.4.1)
+===================================================================
+
+Version progression: none (10.1.4.0; counter 0 -> 0).
+
+- Symptom: Debug smpd.exe exited at startup with 0xC0000409 and printed
+  nothing, so mpiexec reported "unable to start the local smpd manager".
+  Release was unaffected.
+- Diagnosis: native/tools/crashstack.py (new) runs a program under the Win32
+  debug API (DEBUG_ONLY_THIS_PROCESS). It stops at the first fatal event and
+  walks the stack with System32 dbghelp and the build's PDBs. No debugger
+  install was needed, and the pinned SDK was not changed. Result:
+  second-chance 0xC0000409 with fast-fail code 10,
+  FAST_FAIL_GUARD_ICALL_CHECK_FAILURE (a Control Flow Guard indirect-call
+  check), raised for smpd.exe RVA 0x6cd88 = _initterm+0x58
+  (ucrt/startup/initterm.cpp:22), the CRT loop that calls static
+  initializers.
+- Root cause: the phase 4 hardening change. Upstream compiles with
+  ControlFlowGuard (/guard:cf) only in Release (src/mpi.props). The native
+  ItemDefinitionGroup that adds /guard:exportsuppress to mpiexec.vcxproj and
+  smpd.vcxproj applied to every configuration, and that linker option turns
+  CFG on. Debug therefore linked a CFG image from objects compiled without
+  /guard:cf. Their static initializers were not registered as valid call
+  targets, so the CFG-instrumented CRT _initterm failed fast on the first
+  one.
+- Fix: the ItemDefinitionGroup condition is now MSMPI_NATIVE == true and
+  Configuration == Release, with the reason recorded in each project file.
+  Release guard flags stay 0x1001F500, matching Microsoft. Debug images now
+  have no CFG, as upstream's Debug configuration intends.
+- Observed, unchanged: upstream Debug compiles with /MT and /D _DEBUG
+  (mpi.props sets RuntimeLibrary MultiThreaded for every configuration)
+  while linking the debug CRT libraries (CRT_Libs libucrtd, libcmtd,
+  libvcruntimed). That is upstream's configuration, and it builds and runs.
+- Regression check: native/verify.py adds a required Debug stage
+  (--debug-build, default out/Debug-x64/bin). It stages the Debug runtime
+  and requires VERSIONINFO with VS_FF_DEBUG. It builds the C and Fortran
+  probes against the Debug SDK and runs them at 1, 2 and 4 ranks. ProbeChecks()
+  now serves both configurations.
+- Results: Debug baseline 20261017T050743Z 22/22. crashstack on Debug
+  smpd -d 3: no fatal event within 8 s ("smpd listening on port 8677").
+  Release baseline 22/22. verify 20261017T051009Z 28/28. check_abi exit 0.
