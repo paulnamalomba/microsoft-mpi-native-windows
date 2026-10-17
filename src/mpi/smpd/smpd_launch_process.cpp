@@ -592,6 +592,41 @@ fn_exit:
 }
 
 
+#if defined(MSMPI_NATIVE_LAUNCH_TEST)
+//
+// Verification-only helper: a decimal environment value, or 0 when unset.
+//
+static DWORD
+LaunchTestValue(
+    _In_z_ const wchar_t* name
+    )
+{
+    wchar_t value[16];
+    if( MPIU_Getenv( name, value, _countof(value) ) != NOERROR )
+    {
+        return 0;
+    }
+    return wcstoul( value, nullptr, 10 );
+}
+#endif
+
+
+//
+// Ends a rank created by gle_create_mpi_process() whose setup failed while its
+// primary thread was still suspended, so no orphaned suspended process remains.
+//
+static void
+TerminateCreatedProcess(
+    _In_ const PROCESS_INFORMATION* pi,
+    _In_ DWORD exitCode
+    )
+{
+    TerminateProcess(pi->hProcess, exitCode);
+    CloseHandle(pi->hThread);
+    CloseHandle(pi->hProcess);
+}
+
+
 static
 DWORD
 gle_create_mpi_process(
@@ -801,7 +836,37 @@ gle_create_mpi_process(
 
     if (pAffinity != nullptr && pAffinity->Mask != 0)
     {
-        if (g_IsWin7OrGreater)
+        bool useCpuSets = Kernel32::Methods.SetProcessDefaultCpuSetMasks != nullptr;
+#if defined(MSMPI_NATIVE_LAUNCH_TEST)
+        //
+        // Verification-only build: exercise the affinity-mask path on a CPU Sets system.
+        //
+        if (LaunchTestValue(L"MSMPI_NATIVE_TEST_LEGACY_AFFINITY") != 0)
+        {
+            useCpuSets = false;
+        }
+#endif
+        if (useCpuSets)
+        {
+            //
+            // Windows 11 and Windows Server 2022: a process can span processor groups,
+            // so an affinity mask no longer binds it reliably. Assign the rank's default
+            // CPU Sets while its primary thread is still suspended; threads without
+            // their own CPU Sets inherit them.
+            //
+            GROUP_AFFINITY cpuSet = {};
+            cpuSet.Mask = static_cast<KAFFINITY>(pAffinity->Mask);
+            cpuSet.Group = pAffinity->GroupId;
+            if (!Kernel32::Methods.SetProcessDefaultCpuSetMasks(pi.hProcess, &cpuSet, 1))
+            {
+                gle = GetLastError();
+                smpd_dbg_printf(L"failed to set the default CPU Sets of rank %hu, error %u\n", process->rank, gle);
+                TerminateCreatedProcess(&pi, gle);
+                FillErrorMsg(pld, appExe, gle, pLaunchRes);
+                goto fn_exit;
+            }
+        }
+        else if (g_IsWin7OrGreater)
         {
             //
             // MSDN states that a max of 4 groups is supported.
@@ -815,16 +880,33 @@ gle_create_mpi_process(
             //
 
             fSucc = Kernel32::Methods.GetProcessGroupAffinity(pi.hProcess, &nGroups, groups);
+            if (fSucc)
+            {
+                if (nGroups == 1 && groups[0] == pAffinity->GroupId)
+                {
+                    fSucc = SetProcessAffinityMask(pi.hProcess,
+                        static_cast<KAFFINITY>(pAffinity->Mask));
+                }
+                else
+                {
+                    //
+                    // The process was placed in another group. Upstream skipped the
+                    // affinity silently; move the suspended primary thread to the
+                    // requested group and mask instead.
+                    //
+                    GROUP_AFFINITY groupAffinity = {};
+                    groupAffinity.Mask = static_cast<KAFFINITY>(pAffinity->Mask);
+                    groupAffinity.Group = pAffinity->GroupId;
+                    fSucc = Kernel32::Methods.SetThreadGroupAffinity(pi.hThread, &groupAffinity, nullptr);
+                }
+            }
             if (!fSucc)
             {
                 gle = GetLastError();
+                smpd_dbg_printf(L"failed to set the affinity of rank %hu, error %u\n", process->rank, gle);
+                TerminateCreatedProcess(&pi, gle);
                 FillErrorMsg(pld, appExe, gle, pLaunchRes);
                 goto fn_exit;
-            }
-            if (nGroups == 1 && groups[0] == pAffinity->GroupId)
-            {
-                SetProcessAffinityMask(pi.hProcess,
-                    static_cast<KAFFINITY>(pAffinity->Mask));
             }
         }
         else
@@ -954,38 +1036,48 @@ static void smpd_close_std_pipes(HANDLE hPipe[3])
 }
 
 
+//
+// mpiexec numbers the ranks of a host in increasing rank order across launch
+// blocks (smpd_rank_data_t::nodeProcOrder) and maps affinityList[nodeProcOrder]
+// to each rank (RetrieveAffinityForHost). A block's rankArray follows mpiexec's
+// rank list, which is not in rank order, so upstream's "next entry per launched
+// process" gave rank r the entry of another rank: the applied layout was the
+// reverse of the one mpiexec computed and prints. Index by the rank's position
+// instead: the ranks of earlier blocks on this host (blockBase) plus the ranks of
+// this block below it. An index past the list (a later block, such as a spawn,
+// outside the collected layout) gets no affinity rather than reading past it.
+//
+static unsigned int s_affinityBlockBase = 0;
+
 static HWAFFINITY*
-smpd_next_proc_affinity(
-    _In_ const smpd_context_t* pContext
+smpd_proc_affinity(
+    _In_ const smpd_context_t* pContext,
+    _In_ const SmpdLaunchCmd*  pld,
+    _In_ UINT16                index,
+    _In_ unsigned int          blockBase
     )
 {
-    static unsigned int i = 0;
     if( pContext->affinityList == nullptr )
     {
         return nullptr;
     }
 
-    return &pContext->affinityList[i++];
-}
-
-
-#if defined(MSMPI_NATIVE_LAUNCH_TEST)
-//
-// Verification-only helper: a decimal environment value, or 0 when unset.
-//
-static DWORD
-LaunchTestValue(
-    _In_z_ const wchar_t* name
-    )
-{
-    wchar_t value[16];
-    if( MPIU_Getenv( name, value, _countof(value) ) != NOERROR )
+    unsigned int order = blockBase;
+    for( UINT16 j = 0; j < pld->rankCount; ++j )
     {
-        return 0;
+        if( pld->rankArray[j] < pld->rankArray[index] )
+        {
+            ++order;
+        }
     }
-    return wcstoul( value, nullptr, 10 );
+
+    if( order >= static_cast<unsigned int>(pContext->processCount) )
+    {
+        return nullptr;
+    }
+
+    return &pContext->affinityList[order];
 }
-#endif
 
 
 static
@@ -1327,7 +1419,7 @@ smpd_launch_processes(
         }
         else
         {
-            pAff = smpd_next_proc_affinity(pContext);
+            pAff = smpd_proc_affinity(pContext, pld, i, s_affinityBlockBase);
             if (pAff != nullptr && pAff->Mask != 0 && pHPCAffinity != nullptr)
             {
                 pAff->Mask = pHPCAffinity[pAff->GroupId].Mask & pAff->Mask;
@@ -1397,6 +1489,12 @@ smpd_launch_processes(
         }
 #endif
     }
+
+    //
+    // The ranks of the next launch block on this host follow this block's.
+    //
+    s_affinityBlockBase += pld->rankCount;
+
     if (pHPCAffinity != nullptr)
     {
         MPIU_Free(pHPCAffinity);

@@ -73,6 +73,17 @@ typedef VOID  (WINAPI FN_WakeByAddressAll)(
     );
 
 
+//
+// Windows 11 and Windows Server 2022 or later. There, a process can span processor
+// groups by default, so affinity is assigned through its default CPU Sets.
+//
+typedef  _Success_(return == TRUE) BOOL (WINAPI FN_SetProcessDefaultCpuSetMasks)(
+    _In_ HANDLE Process,
+    _In_reads_opt_(CpuSetMaskCount) PGROUP_AFFINITY CpuSetMasks,
+    _In_ USHORT CpuSetMaskCount
+    );
+
+
 extern BOOL     g_IsWin7OrGreater;
 extern BOOL     g_IsWin8OrGreater;
 
@@ -93,6 +104,7 @@ struct Kernel32
     FN_UpdateProcThreadAttribute*           UpdateProcThreadAttribute;
     FN_WaitOnAddress*                       WaitOnAddress;
     FN_WakeByAddressAll*                    WakeByAddressAll;
+    FN_SetProcessDefaultCpuSetMasks*        SetProcessDefaultCpuSetMasks;
 
 
 private:
@@ -156,6 +168,19 @@ private:
                                                                     kernelBase,
                                                                     "WaitOnAddress"
                                                                     ));
+
+                //
+                // nullptr before Windows 11 and Windows Server 2022.
+                //
+                SetProcessDefaultCpuSetMasks = reinterpret_cast<FN_SetProcessDefaultCpuSetMasks*>(
+                                                            ::GetProcAddress(
+                                                                    kernelBase,
+                                                                    "SetProcessDefaultCpuSetMasks"
+                                                                    ));
+            }
+            else
+            {
+                SetProcessDefaultCpuSetMasks = nullptr;
             }
 
             assert(WakeByAddressAll != nullptr);
@@ -165,6 +190,7 @@ private:
         {
             WakeByAddressAll = nullptr;
             WaitOnAddress = nullptr;
+            SetProcessDefaultCpuSetMasks = nullptr;
         }
     }
 };

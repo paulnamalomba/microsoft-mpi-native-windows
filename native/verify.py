@@ -14,7 +14,9 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -163,7 +165,96 @@ def LaunchRegistration(identity, environment, work, runtime, probe, recorder, Ch
         else:
             Check(f'sensitivity control: legacy order reproduces "{REJECTION}" in {launches} of {launches} launches',
                   all(o['rejected'] and not o['succeeded'] for o in outcomes), outcomes)
-    return generated
+    return staged
+
+
+TABLE_ROW = re.compile(r'^\s*(\d{5}) - .* - ([0-9a-f]{8,16})\s*$')
+AFFINITY_ROW = re.compile(r'^AFFINITY rank=(\d+) cpusets=(-?\d+) cpuset=(\d+):0x([0-9a-f]+) process=0x([0-9a-f]+) groups=(\d+) '
+                          r'observed=(\d+):0x([0-9a-f]+) other_groups=(\d+)$')
+
+
+def CpuSetsAvailable():
+    import ctypes
+    kernelbase = ctypes.WinDLL('kernelbase')
+    return hasattr(kernelbase, 'SetProcessDefaultCpuSetMasks')
+
+
+def AffinityChecks(identity, environment, work, runtime, sdk, recorder, Check, legacy_runtime=None):
+    """Applied affinity must equal the layout mpiexec computed and prints (MPIEXEC_AFFINITY_TABLE=1), rank by rank.
+
+    On Windows 11 and Server 2022 the runtime assigns each rank's default CPU Sets and leaves its affinity mask
+    unrestricted, as Microsoft MS-MPI 10.1.3 does. CPU Sets are soft, so observed processors are recorded but not
+    required to stay inside the set. The legacy affinity-mask path (forced in the verification-only smpd) is hard:
+    observed processors must stay inside the mask. Without -affinity nothing is bound.
+    """
+    probe = runtime / 'affinity_check.exe'
+    built = recorder.Run('build-affinity-check', [identity['tools']['cl']['path'], '/nologo', '/MD', '/W4', f'/I{sdk / "inc"}',
+                                                  f'/I{sdk / "inc" / "x64"}', Path(__file__).with_name('tests') / 'probes' / 'affinity_check.c',
+                                                  f'/Fe{probe}', f'/Fo{work / "affinity_check.obj"}', '/link', f'/LIBPATH:{sdk / "lib"}',
+                                                  'msmpi.lib'], work)
+    Check('build affinity_check.c with fork SDK', built['exit_code'] == 0, built['stdout'][-400:])
+    if built['exit_code'] != 0:
+        return
+    cpu_sets = CpuSetsAvailable()
+    full_mask = None
+
+    def Launch(label, directory, arguments, extra):
+        result = recorder.Run(label, [directory / 'mpiexec.exe', *arguments, probe], directory, timeout=180,
+                              env=dict(environment, MPIEXEC_AFFINITY_TABLE='1', **extra))
+        table = {int(m.group(1)): int(m.group(2), 16) for m in map(TABLE_ROW.match, result['stdout'].splitlines()) if m}
+        ranks = {}
+        for match in filter(None, map(AFFINITY_ROW.match, result['stdout'].splitlines())):
+            rank, count, group, cpuset, process, groups, observed_group, observed, other = match.groups()
+            ranks[int(rank)] = dict(cpusets=int(count), cpuset_group=int(group), cpuset=int(cpuset, 16), process=int(process, 16),
+                                    groups=int(groups), observed_group=int(observed_group), observed=int(observed, 16),
+                                    other_groups=int(other))
+        return result, table, ranks
+
+    if (legacy_runtime is not None) and not (legacy_runtime / probe.name).exists():
+        shutil.copy2(probe, legacy_runtime / probe.name)
+    result, table, ranks = Launch('affinity-control', runtime, ['-n', '4'], {})
+    full_mask = next(iter(ranks.values()))['process'] if ranks else None
+    Check('affinity control: without -affinity no rank is bound', result['exit_code'] == 0 and len(ranks) == 4 and not table
+          and all(r['cpusets'] in (0, -1) and r['process'] == full_mask for r in ranks.values()), ranks)
+    cases = [('-affinity', ['-affinity', '-n', str(n)]) for n in RANKS] + [('-affinity_layout seq', ['-affinity_layout', 'seq', '-n', '4'])]
+    paths = [('CPU Sets' if cpu_sets else 'affinity mask', runtime, {})]
+    if legacy_runtime is not None and cpu_sets:
+        paths.append(('legacy affinity mask', legacy_runtime, {'MSMPI_NATIVE_TEST_LEGACY_AFFINITY': '1'}))
+    for path, directory, extra in paths:
+        hard = path != 'CPU Sets'
+        for name, arguments in cases:
+            count = int(arguments[-1])
+            result, table, ranks = Launch(f'affinity-{path}-{name}-{count}'.replace(' ', '_'), directory, arguments, extra)
+            expected_ok = result['exit_code'] == 0 and len(table) == count == len(ranks) and set(table) == set(ranks)
+            if name == '-affinity':
+                masks = list(table.values())
+                expected_ok = expected_ok and len(set(masks)) == count and all(mask and not mask & (mask - 1) for mask in masks)
+            if hard:
+                applied = all(ranks[r]['process'] == table[r] and ranks[r]['cpusets'] in (0, -1)
+                              and ranks[r]['observed'] & ~table[r] == 0 for r in table) if expected_ok else False
+            else:
+                applied = all(ranks[r]['cpusets'] == 1 and ranks[r]['cpuset_group'] == 0 and ranks[r]['cpuset'] == table[r]
+                              and ranks[r]['process'] == full_mask for r in table) if expected_ok else False
+            inside = sum(1 for r in table if r in ranks and ranks[r]['observed'] & ~table[r] == 0)
+            Check(f'{path} affinity {name} at {count} ranks matches the computed layout rank by rank', applied,
+                  dict(table={r: hex(m) for r, m in sorted(table.items())},
+                       ranks={r: {k: (hex(v) if k in ('cpuset', 'process', 'observed') else v) for k, v in d.items()}
+                              for r, d in sorted(ranks.items())},
+                       observed_inside=f'{inside}/{len(table)}', exit_code=result['exit_code']))
+    # Sensitivity control: Microsoft MS-MPI 10.1.3 (the installed ABI reference) assigns each host's layout entries in
+    # launch order, the reverse of the layout it prints. The rank-by-rank check above must detect that.
+    microsoft = Path(os.environ.get('ProgramFiles', r'C:\Program Files')) / 'Microsoft MPI/Bin/mpiexec.exe'
+    if cpu_sets and microsoft.is_file():
+        isolated = work / 'affinity-microsoft'
+        isolated.mkdir()
+        shutil.copy2(probe, isolated / probe.name)  # no app-local msmpi.dll: ranks load Microsoft's System32 copy
+        result = recorder.Run('affinity-microsoft-seq-4', [microsoft, '-affinity_layout', 'seq', '-n', '4', isolated / probe.name],
+                              isolated, timeout=180, env=dict(environment, MPIEXEC_AFFINITY_TABLE='1'))
+        table = {int(m.group(1)): int(m.group(2), 16) for m in map(TABLE_ROW.match, result['stdout'].splitlines()) if m}
+        applied = {int(m.group(1)): int(m.group(4), 16) for m in map(AFFINITY_ROW.match, result['stdout'].splitlines()) if m}
+        Check('sensitivity control: Microsoft MS-MPI 10.1.3 applies the reversed seq layout, which the check rejects',
+              len(table) == len(applied) == 4 and all(applied[r] == table[3 - r] for r in range(4)) and applied != table,
+              dict(table={r: hex(m) for r, m in sorted(table.items())}, applied={r: hex(m) for r, m in sorted(applied.items())}))
 
 
 def ProbeChecks(label, sdk, runtime, work, identity, recorder, Check):
@@ -221,8 +312,10 @@ def Main():
 
     built_c, c_exe, library_output = ProbeChecks('', sdk, runtime, work, identity, recorder, Check)
     native = IdentityChecks(build, runtime, recorder, Check, library_output)
+    legacy_runtime = None
     if built_c['exit_code'] == 0:
-        LaunchRegistration(identity, environment, work, runtime, c_exe, recorder, Check, native)
+        legacy_runtime = LaunchRegistration(identity, environment, work, runtime, c_exe, recorder, Check, native)
+    AffinityChecks(identity, environment, work, runtime, sdk, recorder, Check, legacy_runtime)
     runtimes = {'release': {name: Sha256(runtime / name) for name in RUNTIME}}
     if not args.skip_debug:
         # Required: the Debug configuration (built separately by build.py --configuration Debug) must run.

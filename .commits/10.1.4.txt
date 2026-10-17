@@ -323,3 +323,74 @@ gained schema 2 and the fields previous, candidate, accepted, status
 ("passed"), artifact_produced, utc and artifacts. artifacts lists the zip
 and each zip member as zip!path. The existing values, hashes and evidence
 are unchanged.
+
+## Toward 10.1.4.2: CPU-set affinity and the affinity rank-order fix
+
+Version progression: none yet (accepted 10.1.4.1; candidate 10.1.4.2).
+
+Source evidence:
+- The Microsoft MS-MPI 10.1.3 release note says: "Fix for assigning
+  affinities to mpi worker processes on Windows 11 and Windows Server 2022.
+  On these OSes affinities are being assigned through CPU sets, and not
+  through Affinity masks." The public source (10.1.1) has no CPU-set code.
+- The implementation is clean-room, from that note and the Win32
+  SetProcessDefaultCpuSetMasks documentation (Windows 11 / Server 2022,
+  kernel32). Microsoft's binaries were not disassembled. String inspection
+  only showed that 10.1.3 resolves SetProcessDefaultCpuSetMasks at runtime
+  next to the other kernel32 and kernelbase entries.
+- Black-box comparison: native/tests/probes/affinity_check.c run against
+  the installed Microsoft 10.1.3 and against the fork on this Windows 11
+  machine (20 logical processors, one group). Microsoft assigns exactly one
+  default CPU Set per rank and leaves the process affinity mask unrestricted
+  (0xfffff); the fork now behaves the same.
+
+Changes:
+- src/mpi/common/kernel32util.h: FN_SetProcessDefaultCpuSetMasks and
+  Kernel32::Methods.SetProcessDefaultCpuSetMasks, resolved from kernelbase.
+  It is nullptr before Windows 11 / Server 2022, and nullptr when kernelbase
+  or Windows 8 support is absent.
+- src/mpi/smpd/smpd_launch_process.cpp gle_create_mpi_process:
+  - Where the API exists, the suspended rank gets
+    SetProcessDefaultCpuSetMasks(hProcess, {Mask, GroupId}, 1).
+  - Otherwise the legacy path applies. SetProcessAffinityMask's result is
+    now checked (upstream ignored it). A rank placed in another processor
+    group moves its primary thread with SetThreadGroupAffinity instead of
+    being skipped silently.
+  - Any affinity failure ends the suspended rank through
+    TerminateCreatedProcess() and fails the launch. Upstream returned and
+    left a suspended orphan process.
+  - The test-only MSMPI_NATIVE_TEST_LEGACY_AFFINITY forces the legacy path.
+- Upstream defect fixed, smpd_next_proc_affinity():
+  - Problem: affinityList entries were handed out in launch order through a
+    function-static counter. mpiexec maps entry nodeProcOrder (rank order on
+    the host) to each rank (RetrieveAffinityForHost), and a block's
+    rankArray is not in rank order. Every rank therefore received another
+    rank's entry: the applied layout was the reverse of the computed and
+    printed one. Microsoft 10.1.3 shows the same reversal. The counter also
+    never reset, so a later launch block (such as a spawn) indexed past the
+    list.
+  - Fix: smpd_proc_affinity(pContext, pld, index, s_affinityBlockBase)
+    indexes by blockBase plus the number of this block's ranks below the
+    rank. An index past processCount gets no affinity. The base advances by
+    rankCount after each block.
+- native/verify.py AffinityChecks(): MPIEXEC_AFFINITY_TABLE=1 layout against
+  the probe, rank by rank:
+  - control without -affinity: no binding;
+  - CPU Sets path: -affinity at 1, 2 and 4 ranks, and -affinity_layout seq
+    at 4 ranks. Exactly one CPU Set equal to the computed mask, and an
+    unrestricted process mask. CPU Sets are soft, so observed processors
+    are recorded but not required.
+  - legacy path in the verification-only smpd: the process mask equals the
+    computed mask, and observed processors stay inside it (hard binding);
+  - sensitivity control: Microsoft 10.1.3's reversed seq layout must be
+    rejected.
+- Local results:
+  - clean Release and Debug baselines 22/22 (a stale precompiled-header
+    incremental build first failed with LNK1103; a clean rebuild of the
+    Release intermediates fixed it, and clean CI checkouts are unaffected);
+  - verify 20261017T053648Z 39/39;
+  - check_abi exit 0;
+  - stress 50/50 on mask 0x3.
+- Limit: multi-group (>64 logical processors) placement, including the
+  SetThreadGroupAffinity branch, needs a multi-group host or a test machine
+  booted with bcdedit /set groupsize. That test asks the user first.
