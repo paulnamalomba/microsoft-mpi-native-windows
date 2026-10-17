@@ -12,6 +12,9 @@
 #include "colltuner.h"
 #include <Windows.h>
 #include <ntverp.h>
+#if defined(MSMPI_NATIVE_IDENTITY)
+#include "msmpi_native_version.h"
+#endif
 
 
 /* These are initialized as null (avoids making these into common symbols).
@@ -726,6 +729,17 @@ MPI_Get_library_version(
         goto fn_fail;
     }
 
+#if defined(MSMPI_NATIVE_IDENTITY)
+    //
+    // Native fork builds report the fork's internal version and source commit.
+    //
+    *resultlen = MPIU_Snprintf(
+        version,
+        MPI_MAX_LIBRARY_VERSION_STRING,
+        "%s",
+        MSMPI_NATIVE_LIBRARY_STR
+        );
+#else
     *resultlen = MPIU_Snprintf(
         version,
         MPI_MAX_LIBRARY_VERSION_STRING,
@@ -736,6 +750,7 @@ MPI_Get_library_version(
         _BLDNUMMINOR,
         MSMPI_BUILD_LABEL
         );
+#endif
 
     MPIU_Assert( *resultlen > 0 && *resultlen < MPI_MAX_LIBRARY_VERSION_STRING );
     return MPI_SUCCESS;

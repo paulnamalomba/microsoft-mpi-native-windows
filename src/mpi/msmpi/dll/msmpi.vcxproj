@@ -123,5 +123,12 @@ if not %rc%==1 exit %rce% else exit 0</Command>
     <PackageReference Include="NetworkDirect" Version="2.0.1" />
   </ItemGroup>
 
+  <!-- MSMPI_NATIVE: fork VERSIONINFO (native/version.rc, target 1). -->
+  <ItemGroup Condition=" '$(MSMPI_NATIVE)' == 'true' And '$(MsmpiNativeInclude)' != '' ">
+    <ResourceCompile Include="$(MsmpiNativeRoot)\native\version.rc">
+      <PreprocessorDefinitions>MSMPI_NATIVE_TARGET=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(MsmpiNativeInclude);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

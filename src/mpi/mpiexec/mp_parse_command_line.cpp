@@ -9,6 +9,18 @@
 #include "mpiexec.h"
 #include <direct.h>
 #include <ntverp.h>
+#if defined(MSMPI_NATIVE_IDENTITY)
+#include "msmpi_native_version.h"
+#define MP_PRODUCT_NAME  MSMPI_NATIVE_PRODUCT_WSTR
+#define MP_VERSION_ARGS  MSMPI_NATIVE_VERSION_BREAKING, MSMPI_NATIVE_VERSION_MAJOR, \
+                         MSMPI_NATIVE_VERSION_MINOR, MSMPI_NATIVE_VERSION_BUILD, MSMPI_NATIVE_LABEL_WSTR
+#define MP_SUPPORT_LINE  L"Report issues at " MSMPI_NATIVE_ISSUES_WSTR L"\n"
+#else
+#define MP_PRODUCT_NAME  L"Microsoft MPI"
+#define MP_VERSION_ARGS  MSMPI_VER_MAJOR(MSMPI_VER_EX), MSMPI_VER_MINOR(MSMPI_VER_EX), \
+                         _BLDNUMMAJOR, _BLDNUMMINOR, MSMPI_BUILD_LABEL
+#define MP_SUPPORT_LINE  L"You can reach the Microsoft MPI team via email at askmpi@microsoft.com\n"
+#endif
 
 #define ENV_MPIEXEC_AFFINITY_TABLE L"MPIEXEC_AFFINITY_TABLE"
 #define ENV_MPIEXEC_HWTREE_TABLE L"MPIEXEC_HWTREE_TABLE"
@@ -16,7 +28,7 @@
 void mp_print_options(void)
 {
     wprintf(
-        L"Microsoft MPI Startup Program [Version %d.%d.%d.%d]%s\n"
+        L"%s Startup Program [Version %d.%d.%d.%d]%s\n"
         L"\n"
         L"Launches an application on multiple hosts.\n"
         L"\n"
@@ -44,12 +56,9 @@ void mp_print_options(void)
         L"For a complete list of options, run mpiexec -help2\n"
         L"For a list of environment variables, run mpiexec -help3\n"
         L"\n"
-        L"You can reach the Microsoft MPI team via email at askmpi@microsoft.com\n",
-        MSMPI_VER_MAJOR(MSMPI_VER_EX),
-        MSMPI_VER_MINOR(MSMPI_VER_EX),
-        _BLDNUMMAJOR,
-        _BLDNUMMINOR,
-        MSMPI_BUILD_LABEL
+        MP_SUPPORT_LINE,
+        MP_PRODUCT_NAME,
+        MP_VERSION_ARGS
     );
 }
 

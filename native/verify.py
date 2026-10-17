@@ -53,7 +53,62 @@ REJECTION = 'rejecting unknown process id'
 LAUNCH_DELAY_MS = '300'
 
 
-def LaunchRegistration(identity, environment, work, runtime, probe, recorder, Check):
+def VersionStrings(path):
+    """VERSIONINFO fixed file version and English (0409/04B0) strings, read through version.dll."""
+    import ctypes
+    from ctypes import wintypes
+    version = ctypes.WinDLL('version')
+    size = version.GetFileVersionInfoSizeW(str(path), None)
+    if not size:
+        return None
+    data = ctypes.create_string_buffer(size)
+    if not version.GetFileVersionInfoW(str(path), 0, size, data):
+        return None
+    pointer, length = ctypes.c_void_p(), wintypes.UINT()
+
+    class FixedFileInfo(ctypes.Structure):
+        _fields_ = [(name, wintypes.DWORD) for name in ('signature', 'struc_version', 'file_ms', 'file_ls', 'product_ms',
+                                                        'product_ls', 'flags_mask', 'flags', 'os', 'type', 'subtype',
+                                                        'date_ms', 'date_ls')]
+    result = {}
+    if version.VerQueryValueW(data, '\\', ctypes.byref(pointer), ctypes.byref(length)):
+        fixed = ctypes.cast(pointer, ctypes.POINTER(FixedFileInfo)).contents
+        result['fixed_file_version'] = f'{fixed.file_ms >> 16}.{fixed.file_ms & 0xFFFF}.{fixed.file_ls >> 16}.{fixed.file_ls & 0xFFFF}'
+        result['fixed_product_version'] = (f'{fixed.product_ms >> 16}.{fixed.product_ms & 0xFFFF}.'
+                                           f'{fixed.product_ls >> 16}.{fixed.product_ls & 0xFFFF}')
+        result['file_flags'] = fixed.flags & fixed.flags_mask
+    for name in ('CompanyName', 'FileDescription', 'FileVersion', 'InternalName', 'LegalCopyright', 'OriginalFilename',
+                 'ProductName', 'ProductVersion', 'Comments'):
+        if version.VerQueryValueW(data, f'\\StringFileInfo\\040904B0\\{name}', ctypes.byref(pointer), ctypes.byref(length)):
+            result[name] = ctypes.wstring_at(pointer, length.value).rstrip('\0')
+    return result
+
+
+def IdentityChecks(build, runtime, recorder, Check, library_output):
+    """Every shipped binary, the library string and the mpiexec banner name the same fork build."""
+    native = json.loads((build.parent / 'native-identity' / 'identity.json').read_text(encoding='utf-8'))
+    for name in RUNTIME:
+        strings = VersionStrings(runtime / name) or {}
+        expected = dict(fixed_file_version=native['version'], fixed_product_version=native['version'],
+                        FileVersion=native['version'], ProductVersion=native['product_version'], OriginalFilename=name)
+        mismatched = {key: strings.get(key) for key, value in expected.items() if strings.get(key) != value}
+        # The fork's own name contains "microsoft"; reject only a claim to be Microsoft's company or product.
+        microsoft = [key for key in ('CompanyName', 'ProductName')
+                     if key not in strings or strings[key].lower().startswith('microsoft ')
+                     or 'microsoft corporation' in strings[key].lower() or '®' in strings[key]]
+        Check(f'{name} VERSIONINFO reports fork {native["version"]}', not mismatched and not microsoft,
+              dict(strings=strings, mismatched=mismatched, claims_microsoft=microsoft))
+    Check('MPI_Get_library_version reports the fork identity', f'library=[{native["library"]}]' in library_output,
+          dict(expected=native['library'], output=library_output[-400:]))
+    banner = recorder.Run('mpiexec-help', [runtime / 'mpiexec.exe', '-help'], runtime, timeout=60)
+    first = banner['stdout'].lstrip().splitlines()[0] if banner['stdout'].strip() else ''
+    expected = f'MS-MPI native-windows Startup Program [Version {native["version"]}] (source {native["source"]})'
+    Check('mpiexec banner reports the fork identity', first == expected and 'askmpi@microsoft.com' not in banner['stdout'],
+          dict(expected=expected, observed=first))
+    return native
+
+
+def LaunchRegistration(identity, environment, work, runtime, probe, recorder, Check, native):
     """Deterministic regression test for registering ranks before they can connect.
 
     A Release smpd.exe compiled with MSMPI_NATIVE_LAUNCH_TEST in a disposable copy
@@ -71,7 +126,7 @@ def LaunchRegistration(identity, environment, work, runtime, probe, recorder, Ch
     spec.loader.exec_module(build)
     generated = build.Generate(identity, environment, 'Release', work)
     smpd = build.ROOT / 'src/mpi/smpd/smpd.vcxproj'
-    properties = build.GlobalProperties('Release')
+    properties = build.GlobalProperties('Release', native)
     test_environment = dict(environment, CL='/DMSMPI_NATIVE_LAUNCH_TEST')
     log = work / 'launch-test-smpd-build.log'
     built = recorder.Run('build-launch-test-smpd', [identity['tools']['msbuild']['path'], smpd, '/nologo', '/nr:false', '/m:1',
@@ -138,9 +193,11 @@ def Main():
                                                   f'/exe:{f_exe}', f'/object:{work / "aint_check_f.obj"}', '/link',
                                                   f'/LIBPATH:{sdk / "lib"}', 'msmpifec.lib', 'msmpi.lib'], work)
     Check('build aint_check.f90 with fork SDK (msmpifec aliases)', built_f['exit_code'] == 0, built_f['stdout'][-400:])
+    library_output = ''
     for ranks in RANKS:
         if built_c['exit_code'] == 0:
             result = recorder.Run(f'aint-c-{ranks}', [runtime / 'mpiexec.exe', '-n', str(ranks), c_exe], runtime)
+            library_output += result['stdout']
             marker = f'AINT_C ranks={ranks} passed={ranks}'
             Check(f'C MPI_Aint_add/diff at {ranks} ranks', result['exit_code'] == 0 and marker in result['stdout']
                   and result['stdout'].rstrip().endswith('PASS') and f'dll=[{runtime / "msmpi.dll"}]' in result['stdout'],
@@ -150,9 +207,10 @@ def Main():
             marker = f'AINT_FORTRAN ranks={ranks} passed={ranks} PASS'
             Check(f'Fortran MPI_AINT_ADD/DIFF at {ranks} ranks', result['exit_code'] == 0 and marker in result['stdout'],
                   result['stdout'][-400:] + result['stderr'][-400:])
+    native = IdentityChecks(build, runtime, recorder, Check, library_output)
     if built_c['exit_code'] == 0:
-        LaunchRegistration(identity, environment, work, runtime, c_exe, recorder, Check)
-    summary = dict(kind='native-verify', accepted=False, utc=stamp, build=str(build),
+        LaunchRegistration(identity, environment, work, runtime, c_exe, recorder, Check, native)
+    summary = dict(kind='native-verify', accepted=False, utc=stamp, build=str(build), identity=native,
                    runtime={name: Sha256(runtime / name) for name in RUNTIME}, checks=checks,
                    passed=sum(check['passed'] for check in checks), failed=[c['check'] for c in checks if not c['passed']],
                    commands=recorder.commands)

@@ -79,3 +79,47 @@ Remaining for 10.1.4.1
 - Hosted CI on the public fork, clean-checkout build and release packaging.
 - Required checks 1-4 of AGENTS.md. Downstream requalification (check 5)
   gates SESKA's adoption.
+
+Identity stamping (toward 10.1.4.1)
+===================================
+
+Version progression: none (10.1.4.0; counter 0 -> 0). Native builds stamp a
+candidate; acceptance stays a separate step.
+
+- native/build.py: NextVersion() (single-digit carries), NativeIdentity()
+  (candidate default = next after MSMPI_INTERNAL_VERSION; it must follow the
+  accepted version; source = short commit plus -dirty; attempt = local or
+  ci<GITHUB_RUN_ID>.<attempt>), WriteIdentityHeader() (generated
+  out/<cfg>-x64/native-identity/msmpi_native_version.h and identity.json),
+  and GlobalProperties(configuration, native), which passes MsmpiNativeInclude
+  and MsmpiNativeRoot. Option: baseline --candidate. The library string must
+  stay under MPI_MAX_LIBRARY_VERSION_STRING (64).
+- src/mpi.props SetMSMPIVersion: native-gated ClCompile include directory and
+  MSMPI_NATIVE_IDENTITY=1. Upstream MSMPI_VER and MSMPI_VER_EX are unchanged.
+- native/version.rc (new): one VERSIONINFO template. MSMPI_NATIVE_TARGET
+  selects msmpi.dll (1), mpiexec.exe (2) or smpd.exe (3). FILEVERSION and
+  PRODUCTVERSION carry the candidate; ProductVersion is
+  <version>+<source>.<attempt>. CompanyName is "microsoft-mpi-native-windows
+  (independent fork)", ProductName "MS-MPI native Windows fork", and
+  LegalCopyright keeps Microsoft's line plus the MIT License. Comments name
+  the 10.1.12498.16 source, the commit and the repository. Each of
+  msmpi.vcxproj, mpiexec.vcxproj and smpd.vcxproj gets it as a native-gated
+  ResourceCompile item. Upstream's .rc files need the WDK common.ver, and
+  the public build never compiled them, so these binaries had no version
+  resource before.
+- src/mpi/msmpi/api/mpi_env.cpp MPI_Get_library_version: native branch
+  returns MSMPI_NATIVE_LIBRARY_STR, e.g. "MS-MPI native-windows 10.1.4.1
+  (source bf07f01)".
+- src/mpi/mpiexec/mp_parse_command_line.cpp mp_print_options: the product
+  name, version arguments and support line are macros. Native builds print
+  "MS-MPI native-windows Startup Program [Version 10.1.4.1] (source ...)",
+  and the issue tracker replaces askmpi@microsoft.com. Upstream output is
+  unchanged when MSMPI_NATIVE_IDENTITY is undefined.
+- native/verify.py: VersionStrings() reads VERSIONINFO through version.dll.
+  IdentityChecks() requires the fixed and string versions and
+  OriginalFilename in all three binaries, no claim to be Microsoft's company
+  or product, the probe's library string, and the mpiexec -help first line.
+- Results (local, dirty tree bf07f01-dirty): build baseline
+  20261017T050148Z 22/22; verify 20261017T050315Z 16/16 (11 earlier checks
+  plus 3 VERSIONINFO, library string and banner); check_abi exit 0, with 0
+  unexplained differences.

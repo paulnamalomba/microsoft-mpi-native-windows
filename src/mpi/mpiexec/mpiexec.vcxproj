@@ -88,5 +88,12 @@
       <AdditionalOptions>/guard:exportsuppress %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
+  <!-- MSMPI_NATIVE: fork VERSIONINFO (native/version.rc, target 2). -->
+  <ItemGroup Condition=" '$(MSMPI_NATIVE)' == 'true' And '$(MsmpiNativeInclude)' != '' ">
+    <ResourceCompile Include="$(MsmpiNativeRoot)\native\version.rc">
+      <PreprocessorDefinitions>MSMPI_NATIVE_TARGET=2;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(MsmpiNativeInclude);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
