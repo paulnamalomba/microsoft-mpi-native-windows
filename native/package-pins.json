@@ -1,19 +1,50 @@
 {
-  "schema": 1,
-  "selection_date": "2026-10-16",
-  "rule": "Upstream projects declare these as NuGet PackageReference items that CBT restored. The native driver downloads exactly these bytes, verifies size and SHA-512, and imports the package targets only into projects that reference them.",
+  "schema": 2,
+  "selection_date": "2026-10-17",
+  "rule": "Upstream projects declare these as NuGet PackageReference items that CBT restored. A package with provider 'source' is built natively from its pinned source and imported through the listed targets file; a package with provider 'nuget' is downloaded, verified by size and SHA-512, and its own targets are imported. Only projects that reference a package receive its targets.",
   "packages": {
     "NetworkDirect": {
       "version": "2.0.1",
-      "url": "https://api.nuget.org/v3-flatcontainer/networkdirect/2.0.1/networkdirect.2.0.1.nupkg",
-      "bytes": 467038,
-      "sha512_base64": "l+SKspPBZKgKPtnlHx+fWuhcB+6RxJlQp2tIZWfS5QNGojebgoT/y519L+cPdu/5RV3OdAz50+DBuDEA4lFoqA==",
-      "sha256": "3487c4f7c4cff89a5b3c515fcd77313f2771dbc2f54982c4060405906c95add5",
-      "catalog": "https://api.nuget.org/v3/catalog0/data/2018.11.06.23.42.15/networkdirect.2.0.1.json",
-      "source_project": "https://github.com/Microsoft/NetworkDirect",
-      "targets": "build/NetworkDirect.targets",
-      "contents": "include/{nddef,ndioctl,ndspi,ndstatus,ndsupport}.h and prebuilt lib/{x64,Win32}/ndutil.lib",
-      "follow_up": "ndutil.lib is a 2018 prebuilt binary. Build it from microsoft/NetworkDirect source at a pinned commit before release."
+      "provider": "source",
+      "source": "NetworkDirect",
+      "targets": "native/networkdirect.targets",
+      "reason": "The NuGet 2.0.1 ndutil.lib holds 2018 /GL (LTCG) objects without a PDB. Microsoft documents /GL objects as incompatible across toolset versions (C1047), so ndutil is compiled with the pinned toolset. NuGet 2.0.1 headers nddef.h, ndioctl.h, ndspi.h and ndsupport.h are byte-identical (CRLF-normalized) to the pinned source.",
+      "superseded_nuget": {
+        "url": "https://api.nuget.org/v3-flatcontainer/networkdirect/2.0.1/networkdirect.2.0.1.nupkg",
+        "bytes": 467038,
+        "sha512_base64": "l+SKspPBZKgKPtnlHx+fWuhcB+6RxJlQp2tIZWfS5QNGojebgoT/y519L+cPdu/5RV3OdAz50+DBuDEA4lFoqA==",
+        "sha256": "3487c4f7c4cff89a5b3c515fcd77313f2771dbc2f54982c4060405906c95add5"
+      }
+    }
+  },
+  "sources": {
+    "NetworkDirect": {
+      "repository": "https://github.com/microsoft/NetworkDirect",
+      "license": "MIT (LICENSE.txt)",
+      "commit": "043f1bf05e41343cc88dda619ddd86aee60a02fe",
+      "commit_date": "2022-08-17T15:07:56Z",
+      "url": "https://codeload.github.com/microsoft/NetworkDirect/zip/043f1bf05e41343cc88dda619ddd86aee60a02fe",
+      "archive_prefix": "NetworkDirect-043f1bf05e41343cc88dda619ddd86aee60a02fe/",
+      "archive_note": "GitHub may regenerate archive bytes, so the archive is not pinned; every extracted file below is. Observed archive SHA-256 on 2026-10-17: ca44d8284a5144deec9559fef1a0d69b8b31bc879f6f0903e2536f602a02f4c8 (1,073,569 bytes).",
+      "public_headers": ["src/ndutil/nddef.h", "src/ndutil/ndioctl.h", "src/ndutil/ndspi.h", "src/ndutil/ndsupport.h"],
+      "files": {
+        "LICENSE.txt": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0",
+        "src/ndutil/assertutil.h": "16691f13cc0612fa245f8275ccf944957a1d0d2c7ef09653a3936cf8418b51f5",
+        "src/ndutil/list.h": "9973b2d5c7ce5d31dd7256328eeab03f52621b67688829b5e1c41f065b84dbbd",
+        "src/ndutil/ndaddr.cpp": "04cdc5d6a614e65fd64c48d24588e9c65cd00b166b0cf0886c177850d142214e",
+        "src/ndutil/ndaddr.h": "86024e0942689f47815405499d0b8d077b3f59522ec6e7e53c687b275f77cfaa",
+        "src/ndutil/nddef.h": "e23a0e2d4c370168398446ebe68f238c68f8bdd1c8455e1dedc9726da496bae0",
+        "src/ndutil/ndfrmwrk.cpp": "644ff5852443f788e82fe0fef53441af41feea64fe263b47ae794f8d34df8a8a",
+        "src/ndutil/ndfrmwrk.h": "80507bb23c481d8b5c2735f79968a6ba76acdfd67f71732a156c92ff3ef30ca4",
+        "src/ndutil/ndioctl.h": "1d1162f689bdc04649504139235cfbf250c86c5a495d97273e86fe3879ab5a08",
+        "src/ndutil/ndprov.cpp": "5a9aa4d099c0031afc9acf3d3de7cab38cb6a60a497b7ab043c927e4f1191577",
+        "src/ndutil/ndprov.h": "af2b216b3a44e445e6df032391a5f13ff2aef953aaabaf60ef5354befbf7fd09",
+        "src/ndutil/ndspi.h": "a1de9a0dbd60b39c69a25ff62baca95ee379c7e7b99c1f27c5863e85dd2bac65",
+        "src/ndutil/ndstatus.mc": "50696ec543cb5acb7d3421b2ad2075aca2e0e76c82ce77744b0f1ceef7c3778d",
+        "src/ndutil/ndsupport.h": "b1aa7f3f33a765f1ed79f5e04d2508454c57ff8eb6422af4637626c55e9333f1",
+        "src/ndutil/ndutil.h": "6be6b6de4b7276ad3a0a20f0e15d4e9b609fb2cf42945df5aa1ed053f80e5d0c",
+        "src/ndutil/precomp.h": "a3fa25d5f66382293186a6995a79f5d99a62db4f741f92a69a590ee9088c84c4"
+      }
     }
   }
 }

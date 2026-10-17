@@ -108,15 +108,134 @@ def Generate(identity, environment, configuration, output):
 PACKAGE_REFERENCE = re.compile(r'<PackageReference\s+Include="([^"]+)"\s+Version="([^"]+)"\s*/>')
 
 
-def Packages(cache=ROOT / 'out/packages'):
-    """Download, verify and extract the pinned NuGet packages that upstream restored through CBT."""
-    import base64
-    import hashlib
+def PackagePins():
+    return json.loads((Path(__file__).with_name('package-pins.json')).read_text(encoding='utf-8'))
+
+
+def SourceTree(name, cache=ROOT / 'out/packages'):
+    """Extract a pinned source archive, keeping only the pinned files and verifying each one's SHA-256."""
     import urllib.request
     import zipfile
-    pins = json.loads((Path(__file__).with_name('package-pins.json')).read_text(encoding='utf-8'))['packages']
+    pin = PackagePins()['sources'][name]
+    archive = cache / f'{name.lower()}-{pin["commit"]}.zip'
+    if not archive.is_file():
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(pin['url'], timeout=120) as response:
+            archive.write_bytes(response.read())
+    tree = ROOT / 'out' / 'sources' / f'{name.lower()}-{pin["commit"]}'
+    with zipfile.ZipFile(archive) as package:
+        for relative, digest in pin['files'].items():
+            data = package.read(pin['archive_prefix'] + relative)
+            if hashlib.sha256(data).hexdigest() != digest:
+                raise RuntimeError(f'{name} source file differs from its pin: {relative}')
+            target = tree / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.is_file() or target.read_bytes() != data:
+                target.write_bytes(data)
+    return tree, pin, hashlib.sha256(archive.read_bytes()).hexdigest()
+
+
+def NetworkDirect(identity, environment, configuration, output):
+    """Build ndutil.lib from the pinned NetworkDirect source with the pinned toolset.
+
+    Mirrors src/ndutil/ndutil.vcxproj: precompiled precomp.h created by ndaddr.cpp, _LIB, and ndstatus.h from
+    ndstatus.mc. Code generation follows this fork's configuration: Release /O2 /GL /guard:cf (matching the
+    /LTCG and CFG link of msmpi.dll), Debug /Od without CFG, as upstream's Debug. Both use /MT /Zl like
+    upstream mpi.props, with a PDB. Public symbols are compared against the NuGet 2.0.1 library in
+    PublicSymbolDifferences().
+    """
+    tree, pin, archive_sha256 = SourceTree('NetworkDirect')
+    source = tree / 'src' / 'ndutil'
+    root = ROOT / 'out' / f'{configuration}-x64' / 'networkdirect'
+    include, lib, objects = root / 'include', root / 'lib', root / 'obj'
+    for directory in (include, lib, objects):
+        directory.mkdir(parents=True, exist_ok=True)
+    RunChecked([identity['tools']['mc']['path'], '-h', include, '-r', objects, source / 'ndstatus.mc'], environment,
+               output / 'generate-ndstatus.log')
+    for relative in pin['public_headers']:
+        (include / Path(relative).name).write_bytes((tree / relative).read_bytes())
+    optimization = (['/O2', '/Oi', '/GL', '/guard:cf', '/D', 'NDEBUG'] if configuration == 'Release'
+                    else ['/Od', '/D', '_DEBUG'])
+    # /sdl and /GR- match the NuGet 2.0.1 objects' symbol tables (__autoclassinit2 members, no RTTI descriptors).
+    common = [identity['tools']['cl']['path'], '/nologo', '/c', '/W3', '/EHsc', '/GS', '/sdl', '/GR-', '/Gy', '/MT', '/Zl', '/Zi',
+              f'/Fd{lib / "ndutil.pdb"}', '/D', '_LIB', *optimization, f'/I{source}', f'/I{include}',
+              f'/Fp{objects / "ndutil.pch"}', f'/Fo{objects}\\']
+    RunChecked([*common, '/Yc' + 'precomp.h', source / 'ndaddr.cpp'], environment, output / 'build-ndutil-ndaddr.log')
+    RunChecked([*common, '/Yu' + 'precomp.h', source / 'ndfrmwrk.cpp', source / 'ndprov.cpp'], environment,
+               output / 'build-ndutil.log')
+    library = lib / 'ndutil.lib'
+    RunChecked([identity['tools']['lib']['path'], '/NOLOGO', *(['/LTCG'] if configuration == 'Release' else []),
+                f'/OUT:{library}', *[objects / f'{stem}.obj' for stem in ('ndaddr', 'ndfrmwrk', 'ndprov')]],
+               environment, output / 'link-ndutil.log')
+    reference = SupersededNuget('NetworkDirect')
+    generated_status = (include / 'ndstatus.h').read_bytes().replace(b'\r\n', b'\n')
+    status_matches = reference['ndstatus.h'].replace(b'\r\n', b'\n') == generated_status
+    # The NuGet library is a Release build, so only the Release interface is comparable.
+    differences = (PublicSymbolDifferences(identity, environment, reference['lib'], library)
+                   if configuration == 'Release' else None)
+    if differences or not status_matches:
+        raise RuntimeError(f'Source-built ndutil differs from NuGet 2.0.1: symbols {differences}, '
+                           f'ndstatus.h identical={status_matches}')
+    return dict(generator='NetworkDirect ndutil', commit=pin['commit'], archive_sha256=archive_sha256, root=str(root),
+                ndutil_sha256=hashlib.sha256(library.read_bytes()).hexdigest(), ndstatus_h_matches_nuget=status_matches,
+                public_symbols_match_nuget=(differences == {}) if configuration == 'Release' else 'not applicable (Debug)')
+
+
+def SupersededNuget(name, cache=ROOT / 'out/packages'):
+    """The pinned NuGet package a source build replaced, verified by SHA-512, kept only as a comparison reference."""
+    import base64
+    import urllib.request
+    import zipfile
+    pin = PackagePins()['packages'][name]
+    nuget = pin['superseded_nuget']
+    archive = cache / f'{name.lower()}.{pin["version"]}.nupkg'
+    if not archive.is_file():
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(nuget['url'], timeout=120) as response:
+            archive.write_bytes(response.read())
+    data = archive.read_bytes()
+    if len(data) != nuget['bytes'] or base64.b64encode(hashlib.sha512(data).digest()).decode() != nuget['sha512_base64']:
+        archive.unlink()
+        raise RuntimeError(f'Reference package {name} {pin["version"]} differs from its pin')
+    reference = cache / f'{name.lower()}.{pin["version"]}-reference'
+    reference.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(archive) as package:
+        (reference / 'ndutil.lib').write_bytes(package.read('lib/x64/ndutil.lib'))
+        return dict(lib=reference / 'ndutil.lib', **{'ndstatus.h': package.read('include/ndstatus.h')})
+
+
+def PublicSymbolDifferences(identity, environment, reference, library):
+    """Archive public symbols present in only one library, ignoring two classes that carry no interface:
+    the precompiled-header marker (__@@_PchSym_, derived from the build path) and the string-literal
+    decoration change of newer compilers (??_C@...?$AA@ versus ??_C@...@)."""
+    def Symbols(path):
+        listing = subprocess.run([str(identity['tools']['dumpbin']['path']), '/nologo', '/linkermember:1', str(path)], env=environment,
+                                 capture_output=True, text=True, encoding='utf-8', errors='replace', check=True).stdout
+        names = set()
+        for line in listing.splitlines():
+            match = re.match(r'^\s+[0-9A-F]+\s+(\S+)$', line)
+            if match and not match.group(1).startswith('__@@_PchSym_'):
+                name = match.group(1)
+                names.add(name[:-len('?$AA@')] + '@' if name.startswith('??_C@') and name.endswith('?$AA@') else name)
+        return names
+    old, new = Symbols(reference), Symbols(library)
+    return dict(only_reference=sorted(old - new), only_source=sorted(new - old)) if old != new else {}
+
+
+def Packages(cache=ROOT / 'out/packages'):
+    """Download, verify and extract the pinned NuGet packages that upstream restored through CBT.
+
+    A package whose provider is 'source' maps to its native targets file instead; NetworkDirect() builds it.
+    """
+    import base64
+    import urllib.request
+    import zipfile
+    pins = PackagePins()['packages']
     extracted = {}
     for name, pin in pins.items():
+        if pin.get('provider') == 'source':
+            extracted[(name, pin['version'])] = ROOT / pin['targets']
+            continue
         archive = cache / f'{name.lower()}.{pin["version"]}.nupkg'
         if not archive.is_file():
             archive.parent.mkdir(parents=True, exist_ok=True)
@@ -242,6 +361,9 @@ def Baseline(args):
     native = NativeIdentity(args.candidate)
     properties = GlobalProperties(args.configuration, native)
     generated = Generate(identity, environment, args.configuration, output)
+    networkdirect = NetworkDirect(identity, environment, args.configuration, output)
+    generated.append(networkdirect)
+    properties['MsmpiNetworkDirectRoot'] = networkdirect['root']
     packages = Packages()
     results = []
     for index, project in enumerate(Projects()):

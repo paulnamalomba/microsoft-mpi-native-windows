@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSMPI_NATIVE replacement for the NetworkDirect 2.0.1 NuGet targets (mpichannels, mpid and msmpi).
+  native/build.py NetworkDirect() compiles ndutil.lib from the pinned microsoft/NetworkDirect source with
+  the pinned toolset and stages the public headers and the mc.exe-generated ndstatus.h next to it.
+  MsmpiNetworkDirectRoot is a global property set by the driver.
+-->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(MsmpiNetworkDirectRoot)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(MsmpiNetworkDirectRoot)\lib\ndutil.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

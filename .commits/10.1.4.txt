@@ -165,3 +165,54 @@ Version progression: none (10.1.4.0; counter 0 -> 0).
 - Results: Debug baseline 20261017T050743Z 22/22. crashstack on Debug
   smpd -d 3: no fatal event within 8 s ("smpd listening on port 8677").
   Release baseline 22/22. verify 20261017T051009Z 28/28. check_abi exit 0.
+
+ndutil built from pinned NetworkDirect source (toward 10.1.4.1)
+================================================================
+
+Version progression: none (10.1.4.0; counter 0 -> 0).
+
+- Reason: the NetworkDirect 2.0.1 NuGet ndutil.lib holds three 2018 /GL
+  (LTCG) objects (dumpbin: ANON OBJECT, 2018-11-06) without a PDB
+  (LNK4099). Microsoft documents /GL objects as incompatible across toolset
+  versions, even minor updates (C1047). The 14.44 link accepted them, but
+  that mix sits outside Microsoft's compatibility guarantee.
+- Source pin (native/package-pins.json schema 2):
+  microsoft/NetworkDirect 043f1bf05e41343cc88dda619ddd86aee60a02fe
+  (2022-08-17, MIT). Per-file SHA-256 pins for LICENSE.txt and the 15
+  src/ndutil files. The codeload archive is not pinned, because GitHub may
+  regenerate archive bytes; the observed hash is recorded (ca44d828...).
+  The NuGet package is now a superseded, SHA-512-verified comparison
+  reference only.
+- native/build.py:
+  - SourceTree() extracts only the pinned files and verifies each.
+  - NetworkDirect() runs mc.exe on ndstatus.mc and stages nddef.h,
+    ndioctl.h, ndspi.h, ndsupport.h and ndstatus.h. It compiles ndaddr.cpp
+    (/Yc precomp.h), ndfrmwrk.cpp and ndprov.cpp (/Yu) with cl /W3 /EHsc
+    /GS /sdl /GR- /Gy /MT /Zl /Zi /D _LIB. Release adds /O2 /Oi /GL
+    /guard:cf /D NDEBUG; Debug adds /Od /D _DEBUG. lib.exe (/LTCG in
+    Release) writes out/<cfg>-x64/networkdirect/lib/ndutil.lib and its PDB.
+  - SupersededNuget() and PublicSymbolDifferences() fail the build unless
+    ndstatus.h equals the NuGet copy and, in Release, the public symbols
+    match. Two name classes that carry no interface are ignored: the
+    build-path precompiled-header marker and the newer string-literal
+    decoration.
+  - Packages() maps a provider 'source' package to its targets file.
+    Baseline passes MsmpiNetworkDirectRoot.
+- native/networkdirect.targets replaces the NuGet targets for mpichannels,
+  mpid and msmpi: include directory plus the source-built ndutil.lib.
+- Header identity: NuGet 2.0.1 nddef.h, ndioctl.h, ndspi.h and ndsupport.h
+  are byte-identical (CRLF-normalized) to the source commit's, and the
+  generated ndstatus.h equals the NuGet copy.
+- Symbol parity: /sdl and /GR- were added after the first comparison showed
+  the NuGet objects carry __autoclassinit2 members and no RTTI descriptors.
+  Final: 128 public symbols on each side, with no differences beyond the
+  two ignored classes.
+- Results:
+  - Release baseline 20261017T051424Z 22/22: the msmpi link uses
+    out\Release-x64\networkdirect\lib\ndutil.lib with no networkdirect.2.0.1
+    path and no LNK4099; mpichannels compiles against the staged headers.
+  - Debug baseline 22/22.
+  - verify 20261017T051745Z 28/28.
+  - check_abi exit 0; check_errmsgs exit 0.
+- Limit: no RDMA hardware or NetworkDirect provider is installed, so the
+  NetworkDirect transport itself is untested.
