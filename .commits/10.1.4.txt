@@ -216,3 +216,54 @@ Version progression: none (10.1.4.0; counter 0 -> 0).
   - check_abi exit 0; check_errmsgs exit 0.
 - Limit: no RDMA hardware or NetworkDirect provider is installed, so the
   NetworkDirect transport itself is untested.
+
+Hosted CI, stress test and packaging (toward 10.1.4.1)
+======================================================
+
+Version progression: none (10.1.4.0; counter 0 -> 0).
+
+- .github/workflows/native-windows.yml (new): windows-2022, the image where
+  the launch race appeared. It runs on push to master and feature/**, on
+  pull requests and on workflow_dispatch (inputs candidate and
+  stress_launches), with contents read permission only. Actions are pinned
+  by SHA, as in the backend: checkout 3d3c42e5, setup-python 5fda3b95 with
+  Python 3.13.5, upload-artifact cf430e03.
+  Steps:
+  - install the pinned toolchain and the MS-MPI 10.1.3 reference;
+  - build.py environment;
+  - Release and Debug baselines;
+  - check_errmsgs against System32 msmpi.dll, then check_abi;
+  - verify.py;
+  - stress.py, 200 four-rank launches on two CPUs;
+  - unit tests;
+  - package.py --require-clean, with the verify and stress summaries as
+    evidence.
+  Artifacts: msmpi-native-windows-x64 (the zip and its .zip.json) and
+  msmpi-native-windows-evidence.
+- native/ci/download_toolchain.py and native/ci/install-toolchain.ps1:
+  ported from petsc-native-windows b110b884. The SHA-256 of each source is
+  in its header. Changes: the pin file, the cache path, and a component set
+  without icx and mkl. Downloads are size-, hash- and Authenticode-checked
+  as in PETSc.
+- native/toolchain-pins.json: visual_studio_installer (17.14.42 bootstrap),
+  msmpi_runtime and msmpi_sdk (10.1.3) are copied verbatim from the same
+  PETSc commit. reference_msmpi now points to them; they are installed only
+  as the ABI and catalog reference.
+- native/tests/stress.py (new), for required check 3 (repeated launches
+  under starved CPU allocations). SetProcessAffinityMask limits this
+  process to the first --cpus logical processors, so mpiexec, smpd and the
+  ranks inherit it. Every launch must pass the probe and print no
+  "rejecting unknown process id". Local run 20261017T052003Z: 30/30 on
+  mask 0x3, 0 rejections.
+- native/package.py (new) writes msmpi-native-windows-<version>-x64.zip.
+  - Layout mirrors Microsoft's installation: Bin (msmpi.dll, mpiexec.exe,
+    smpd.exe), Include, Lib/x64 (msmpi, msmpifec, msmpifmc, msmpifes,
+    msmpifms), Symbols (PDBs), and licenses (MS-MPI MIT LICENSE.txt,
+    COPYRIGHT-mpich.txt, NetworkDirect MIT LICENSE.txt).
+  - manifest.json records identity, source commit, CI run, toolchain, pin
+    hashes, evidence hashes and the SHA-256 of every file.
+  - Entries are sorted with fixed timestamps.
+  - It refuses a build whose stamped source is not the checkout, and with
+    --require-clean a -dirty source.
+  - Local check: two runs gave the same zip, SHA-256 d8eca28c... (8,497,106
+    bytes, 23 files), from the dirty tree 4dfe725-dirty, so not a candidate.
