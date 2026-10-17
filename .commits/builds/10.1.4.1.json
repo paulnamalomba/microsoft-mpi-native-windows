@@ -1,0 +1,257 @@
+{
+  "schema": 1,
+  "product": "microsoft-mpi-native-windows",
+  "previous_version": "10.1.4.0",
+  "accepted_version": "10.1.4.1",
+  "counter": "0 -> 1",
+  "family_note": ".commits/10.1.4.txt",
+  "accepted_utc": "2026-10-17T05:39:33Z",
+  "source": {
+    "commit": "9a5eb72c163de0a2042615557d47fb9160c2b196",
+    "branch": "feature/native-seska-integration",
+    "stamped_source": "9a5eb72",
+    "clean": true,
+    "upstream": "microsoft/Microsoft-MPI f2d849ff483b36add9bc2d18c6d7bbc9ce38f4ad (declares 10.1.12498.16)"
+  },
+  "build": {
+    "kind": "hosted clean checkout",
+    "ci_run": "https://github.com/paulnamalomba/microsoft-mpi-native-windows/actions/runs/39006111157",
+    "run_id": 39006111157,
+    "attempt": 1,
+    "event": "push",
+    "runner": "windows-2022 (GitHub-hosted)",
+    "started": "2026-10-17T05:24:00Z",
+    "completed": "2026-10-17T05:33:32Z",
+    "product_version": "10.1.4.1+9a5eb72.ci39006111157.1",
+    "configurations": [
+      "Release",
+      "Debug"
+    ]
+  },
+  "toolchain": {
+    "visual_studio_build_tools": "17.14.37411.7",
+    "msvc_toolset": "14.44.35207",
+    "windows_sdk": "10.0.26100.0",
+    "ifx": "2026.1.1.20",
+    "python": "3.13.5",
+    "installs": [
+      {
+        "component": "ifx",
+        "version": "2026.1.1.20",
+        "installer_sha256": "c9530229b691e266d3df153db26d0118e7858586f7892e7a9da73cf1ddd3910e",
+        "exit_code": 0,
+        "authenticode": "Valid",
+        "signer": "CN=Intel Corporation, O=Intel Corporation, S=California, C=US, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.2=California, OID.1.3.6.1.4.1.311.60.2.1.3=US, SERIALNUMBER=1636032"
+      },
+      {
+        "component": "msmpi_runtime",
+        "version": "10.1.3",
+        "installer_sha256": "47443829114d8d8670f77af98939fe876d33eceb35d0ce4e0e85efeec4d87213",
+        "exit_code": 0,
+        "authenticode": "Valid",
+        "signer": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+      },
+      {
+        "component": "msmpi_sdk",
+        "version": "10.1.3",
+        "installer_sha256": "8ccbc77a0cfe1e30f7495a759886b4d99b2c494b9b9ad414dcda1da84c00d3fa",
+        "exit_code": 0,
+        "authenticode": "Valid",
+        "signer": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+      },
+      {
+        "component": "visual_studio",
+        "version": "17.14.35",
+        "installer_sha256": "650517f804f6b1fc7d1e274202ee43e2d027cbdbf9376a8e94c7c5bb32abfd99",
+        "exit_code": 0,
+        "authenticode": "Valid",
+        "signer": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+      },
+      {
+        "component": "visual_studio_installer",
+        "version": "17.14.42-bootstrapper-installer-only",
+        "installer_sha256": "68978bb28916156802e60e04c5ee50b94348d802fe151a3ca24433f27984187b",
+        "exit_code": 0,
+        "authenticode": "Valid",
+        "signer": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+      }
+    ],
+    "pins": {
+      "native/toolchain-pins.json": "7676e049a11ddfa8b8aeef97f350a783c79f0300a7842c691ae7d17fd54b4895",
+      "native/package-pins.json": "2609d07411c50169ef5da20dea0ca90ae8cfa972b36ea5cf9c15087ba698ce24"
+    },
+    "networkdirect_source": "microsoft/NetworkDirect 043f1bf05e41343cc88dda619ddd86aee60a02fe (ndutil built from source)"
+  },
+  "commands": [
+    "python -B native/ci/download_toolchain.py --cache $RUNNER_TEMP\toolchain-cache",
+    "pwsh -NoProfile -File native/ci/install-toolchain.ps1 -Component {visual_studio_installer,visual_studio,ifx,msmpi_runtime,msmpi_sdk}",
+    "python -B native/build.py environment",
+    "python -B native/build.py baseline --configuration Release",
+    "python -B native/build.py baseline --configuration Debug",
+    "python -B native/check_errmsgs.py src/mpi/common/x64/Release/defmsg.h %SystemRoot%/System32/msmpi.dll",
+    "python -B native/check_abi.py",
+    "python -B native/verify.py",
+    "python -B native/tests/stress.py --launches 200 --ranks 4 --cpus 2",
+    "python -B -m unittest discover -s native/tests -p test_*.py -v",
+    "python -B native/package.py --require-clean --evidence <verify and stress summaries>"
+  ],
+  "checks": {
+    "hosted_steps": {
+      "Set up job": "success",
+      "Select the toolchain cache": "success",
+      "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "success",
+      "Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": "success",
+      "Install the pinned toolchain and the MS-MPI 10.1.3 reference": "success",
+      "Verify the pinned environment": "success",
+      "Build Release": "success",
+      "Build Debug": "success",
+      "Error-message catalog parity with Microsoft msmpi.dll": "success",
+      "ABI and hardening parity with Microsoft MS-MPI 10.1.3": "success",
+      "Identity, probes, launch-race regression and Debug runtime": "success",
+      "Repeated four-rank launches on two CPUs": "success",
+      "Unit tests": "success",
+      "Package the runtime and SDK": "success",
+      "Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9": "success",
+      "Post Run actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97": "success",
+      "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "success",
+      "Complete job": "success"
+    },
+    "required_1_native_build": "Release and Debug baselines 22/22 projects each, from a clean hosted checkout with the pinned toolchain",
+    "required_2_abi": "check_abi.py exit 0 (0 unexplained differences against installed Microsoft MS-MPI 10.1.3: exports, import libraries, headers, hardening flags); check_errmsgs.py exit 0 (catalog parity with Microsoft msmpi.dll)",
+    "required_3_launch_race": "verify.py deterministic test (fixed order 5/5 with a 300 ms resume delay; legacy-order control 3/3 rejected); stress.py 200/200 four-rank launches on mask 0x3 of 4 logical processors, 0 rejections",
+    "required_4_probes": "verify.py 28/28 (C and Fortran probes at 1, 2 and 4 ranks on Release and Debug runtimes, identity, banner)",
+    "local_package_check": "native/check_package.py 14/14 on 20261017T053820Z against the downloaded zip (hashes, VERSIONINFO, probes against the package SDK at 1, 2 and 4 ranks, 50 starved launches)",
+    "required_5_downstream": "not part of this acceptance; gates SESKA adoption (PETSc fork and SESKA requalification)"
+  },
+  "evidence": {
+    "native-verify/20261017T053235Z/summary.json": "da93896bf1a22e5d4545e68624e7cca06ec1edb7b4a67c9cdcc34e10f09f4345",
+    "native-stress/20261017T053259Z/summary.json": "9f68433cb34e6b0235380f572982b0a62065bece6e4b532c4f9a180b1ef85fc2",
+    "native-baseline/20261017T052837Z/summary.json": "f0b915b76bdf1a89cb185c42ff1d0dfad3d6db0258b253a823d0f293c7e3894a",
+    "native-baseline/20261017T053038Z/summary.json": "4e1ccae6bd2b7dff9c16aafc4517b66f887782c2a342c367f0ce1d09e4c097fa"
+  },
+  "artifact": {
+    "name": "msmpi-native-windows-10.1.4.1-x64.zip",
+    "sha256": "d946d4ed37545b08820318161189a9616d2edcbb38ac20d49ea85c5e307338d3",
+    "bytes": 7890840,
+    "files": [
+      {
+        "path": "Bin/mpiexec.exe",
+        "sha256": "122969a1282180e41e1d05ae48b805f10a891262bade1b5df4ba50fde6816dae",
+        "bytes": 556032
+      },
+      {
+        "path": "Bin/msmpi.dll",
+        "sha256": "a4e4ddba934e2ba64a77bb9041ee126683912f209a64456868993256eb1c4734",
+        "bytes": 1713152
+      },
+      {
+        "path": "Bin/smpd.exe",
+        "sha256": "db8be3794c3fee0906cb75f59e6b11b09ba2dbb200db6242c1f30d025a4bfd5b",
+        "bytes": 440320
+      },
+      {
+        "path": "Include/mpi.f90",
+        "sha256": "18cd772e2b88fe891e9c89ef3ba16b9d5a13c29e504ea0bfdcaaedc84b6526cc",
+        "bytes": 55162
+      },
+      {
+        "path": "Include/mpi.h",
+        "sha256": "cc23825faee71ffacf666300c375f4c73d605e72cd04310ce5efae778244fd7b",
+        "bytes": 175354
+      },
+      {
+        "path": "Include/mpif.h",
+        "sha256": "46af38075602397da4380d28bd82f85d9a51f47ae8fb7b70ab50eb85b682eda1",
+        "bytes": 20078
+      },
+      {
+        "path": "Include/mpio.h",
+        "sha256": "6a7e51b5eb7fb4c7b75886e0c4bc5c52584be0ed453fc0e0fb706fbf0286018b",
+        "bytes": 143
+      },
+      {
+        "path": "Include/mspms.h",
+        "sha256": "d618f62bf6866cb523a9d8dca24f194e4065f3351f58fcacef18451b22f5c411",
+        "bytes": 5688
+      },
+      {
+        "path": "Include/pmidbg.h",
+        "sha256": "d79ad3b3d37b9e90e9518af3293e3526f7506c1a17724ec29c8c1fb805c1ef16",
+        "bytes": 17857
+      },
+      {
+        "path": "Include/x64/mpifptr.h",
+        "sha256": "e1f280b0d5d8d770ae12488968e1ddecd6d09eb28a86194caf5285183e415a37",
+        "bytes": 266
+      },
+      {
+        "path": "Include/x86/mpifptr.h",
+        "sha256": "a4bd0ed8711f7a51a67be1e512e69f37458c002ea9604a92ff1f78f6b91eab61",
+        "bytes": 267
+      },
+      {
+        "path": "Lib/x64/msmpi.lib",
+        "sha256": "92a323fa3de48c67962454a71363ef65541448e5209b24a2045aa2aa3bbcb168",
+        "bytes": 321236
+      },
+      {
+        "path": "Lib/x64/msmpifec.lib",
+        "sha256": "6055741af6161d70a86452a97e6671ff7a8bb9c97104fb2548c525102b07b945",
+        "bytes": 1095040
+      },
+      {
+        "path": "Lib/x64/msmpifes.lib",
+        "sha256": "b85d4de87a4213f460ad06a085eb1eb78f6d1adf28764832e61892559ca3d398",
+        "bytes": 1154090
+      },
+      {
+        "path": "Lib/x64/msmpifmc.lib",
+        "sha256": "7ff5df8650c60335a02f6c406fb1223f2143e74f2a36565c1bb24a9e9b1ebc60",
+        "bytes": 1112096
+      },
+      {
+        "path": "Lib/x64/msmpifms.lib",
+        "sha256": "ee93d74a65a6dc9d3928a69c53ae703e5785399f9d7bc980d008a39132024e14",
+        "bytes": 1171146
+      },
+      {
+        "path": "Symbols/mpiexec.pdb",
+        "sha256": "cffd8b3860ccfdd1830bfcfe5d648758a87d5241aa51d0afb15d6e689585236c",
+        "bytes": 6434816
+      },
+      {
+        "path": "Symbols/msmpi.pdb",
+        "sha256": "e74caeda07ed4e501773d384af7cd388e2259d56cb4b97ab7d25c0cfaa25c931",
+        "bytes": 11563008
+      },
+      {
+        "path": "Symbols/smpd.pdb",
+        "sha256": "2134a11d324b3fd7134a4053f7530dd15d26ab01c87124ed94fa0f85b072ac58",
+        "bytes": 5820416
+      },
+      {
+        "path": "licenses/COPYRIGHT-mpich.txt",
+        "sha256": "46c5a444da13a066696d23a1d3e0edf504163f6a4dbee9115d1ed43df47a2f68",
+        "bytes": 1579
+      },
+      {
+        "path": "licenses/LICENSE.txt",
+        "sha256": "dea9265341829002e2c23a7372393eb2ed6e26085fb623f38a4ba0af833f30a6",
+        "bytes": 1183
+      },
+      {
+        "path": "licenses/NetworkDirect-LICENSE.txt",
+        "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0",
+        "bytes": 1162
+      }
+    ]
+  },
+  "limitations": [
+    "Not code-signed",
+    "Third-party notice review (G20) open",
+    "NetworkDirect/RDMA transport untested (no hardware)",
+    "CPU-set affinity of 10.1.3 not yet restored (follows as 10.1.4.2)",
+    "Downstream PETSc/SESKA requalification pending",
+    "Not published as a GitHub release at acceptance time"
+  ]
+}

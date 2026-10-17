@@ -267,3 +267,50 @@ Version progression: none (10.1.4.0; counter 0 -> 0).
     --require-clean a -dirty source.
   - Local check: two runs gave the same zip, SHA-256 d8eca28c... (8,497,106
     bytes, 23 files), from the dirty tree 4dfe725-dirty, so not a candidate.
+
+## [10.1.4.1] - 2026-10-17 (first accepted build)
+
+Build Progression
+=================
+
+| UTC | Outcome | Previous accepted | Accepted | Counter | Profile | Evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-10-17T05:24Z-05:33Z | Accepted | 10.1.4.0 (unbuilt seed) | 10.1.4.1 | 0 -> 1 | Release + Debug, windows-2022 hosted | run 39006111157; .commits/builds/10.1.4.1.json |
+
+Source:      9a5eb72c163de0a2042615557d47fb9160c2b196 (clean hosted checkout;
+             stamped 10.1.4.1+9a5eb72.ci39006111157.1)
+Toolchain:   VS Build Tools 17.14.37411.7, MSVC 14.44.35207, Windows SDK
+             10.0.26100.0, Intel ifx 2026.1.1.20 and Python 3.13.5. All
+             installers were Authenticode-valid (Microsoft and Intel) and
+             hash-pinned; native/toolchain-pins.json SHA-256 7676e049....
+             NetworkDirect ndutil was built from 043f1bf0.
+Reference:   Microsoft MS-MPI 10.1.3 runtime and SDK, installed on the
+             runner for parity checks only.
+Commands:    as recorded in the build record and the workflow.
+Checks:
+- Required check 1: Release and Debug baselines, 22/22 projects each.
+- Required check 2: check_errmsgs.py and check_abi.py passed, with 0
+  unexplained ABI or hardening differences against MS-MPI 10.1.3.
+- Required check 3: verify.py's deterministic launch-race test passed (fixed
+  order 5/5; legacy control 3/3 rejected). stress.py: 200/200 four-rank
+  launches on CPU mask 0x3 of the runner's 4 logical processors, with 0
+  rejections, on hosted Windows, where the race originally aborted jobs.
+- Required check 4: verify.py 28/28 (C and Fortran probes at 1, 2 and 4
+  ranks on the Release and Debug runtimes, identity, banner); unit tests
+  passed.
+- Local consumer check: native/check_package.py 14/14 against the
+  downloaded zip (hashes, VERSIONINFO, probes against the package SDK, 50
+  starved launches).
+Artifact:    msmpi-native-windows-10.1.4.1-x64.zip, SHA-256
+             d946d4ed37545b08820318161189a9616d2edcbb38ac20d49ea85c5e307338d3
+             (7,890,840 bytes, 22 files plus manifest.json; per-file hashes
+             in the build record).
+Limits:
+- Not code-signed; the G20 notice review is open.
+- The NetworkDirect/RDMA transport is untested.
+- CPU-set affinity follows as 10.1.4.2.
+- PETSc and SESKA requalification (required check 5) gates adoption.
+- Not yet published as a GitHub release.
+Later commits: this acceptance commit adds only .commits records,
+MSMPI_INTERNAL_VERSION and native/check_package.py, the consumer-side
+checker used above. No built source changed after 9a5eb72.
