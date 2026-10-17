@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "product": "microsoft-mpi-native-windows",
   "previous_version": "10.1.4.0",
   "accepted_version": "10.1.4.1",
@@ -253,5 +253,128 @@
     "CPU-set affinity of 10.1.3 not yet restored (follows as 10.1.4.2)",
     "Downstream PETSc/SESKA requalification pending",
     "Not published as a GitHub release at acceptance time"
+  ],
+  "previous": "10.1.4.0",
+  "candidate": "10.1.4.1",
+  "accepted": "10.1.4.1",
+  "status": "passed",
+  "artifact_produced": true,
+  "utc": "2026-10-17T05:39:33Z",
+  "artifacts": [
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip",
+      "bytes": 7890840,
+      "sha256": "d946d4ed37545b08820318161189a9616d2edcbb38ac20d49ea85c5e307338d3"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Bin/mpiexec.exe",
+      "bytes": 556032,
+      "sha256": "122969a1282180e41e1d05ae48b805f10a891262bade1b5df4ba50fde6816dae"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Bin/msmpi.dll",
+      "bytes": 1713152,
+      "sha256": "a4e4ddba934e2ba64a77bb9041ee126683912f209a64456868993256eb1c4734"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Bin/smpd.exe",
+      "bytes": 440320,
+      "sha256": "db8be3794c3fee0906cb75f59e6b11b09ba2dbb200db6242c1f30d025a4bfd5b"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Include/mpi.f90",
+      "bytes": 55162,
+      "sha256": "18cd772e2b88fe891e9c89ef3ba16b9d5a13c29e504ea0bfdcaaedc84b6526cc"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Include/mpi.h",
+      "bytes": 175354,
+      "sha256": "cc23825faee71ffacf666300c375f4c73d605e72cd04310ce5efae778244fd7b"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Include/mpif.h",
+      "bytes": 20078,
+      "sha256": "46af38075602397da4380d28bd82f85d9a51f47ae8fb7b70ab50eb85b682eda1"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Include/mpio.h",
+      "bytes": 143,
+      "sha256": "6a7e51b5eb7fb4c7b75886e0c4bc5c52584be0ed453fc0e0fb706fbf0286018b"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Include/mspms.h",
+      "bytes": 5688,
+      "sha256": "d618f62bf6866cb523a9d8dca24f194e4065f3351f58fcacef18451b22f5c411"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Include/pmidbg.h",
+      "bytes": 17857,
+      "sha256": "d79ad3b3d37b9e90e9518af3293e3526f7506c1a17724ec29c8c1fb805c1ef16"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Include/x64/mpifptr.h",
+      "bytes": 266,
+      "sha256": "e1f280b0d5d8d770ae12488968e1ddecd6d09eb28a86194caf5285183e415a37"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Include/x86/mpifptr.h",
+      "bytes": 267,
+      "sha256": "a4bd0ed8711f7a51a67be1e512e69f37458c002ea9604a92ff1f78f6b91eab61"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Lib/x64/msmpi.lib",
+      "bytes": 321236,
+      "sha256": "92a323fa3de48c67962454a71363ef65541448e5209b24a2045aa2aa3bbcb168"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Lib/x64/msmpifec.lib",
+      "bytes": 1095040,
+      "sha256": "6055741af6161d70a86452a97e6671ff7a8bb9c97104fb2548c525102b07b945"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Lib/x64/msmpifes.lib",
+      "bytes": 1154090,
+      "sha256": "b85d4de87a4213f460ad06a085eb1eb78f6d1adf28764832e61892559ca3d398"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Lib/x64/msmpifmc.lib",
+      "bytes": 1112096,
+      "sha256": "7ff5df8650c60335a02f6c406fb1223f2143e74f2a36565c1bb24a9e9b1ebc60"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Lib/x64/msmpifms.lib",
+      "bytes": 1171146,
+      "sha256": "ee93d74a65a6dc9d3928a69c53ae703e5785399f9d7bc980d008a39132024e14"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Symbols/mpiexec.pdb",
+      "bytes": 6434816,
+      "sha256": "cffd8b3860ccfdd1830bfcfe5d648758a87d5241aa51d0afb15d6e689585236c"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Symbols/msmpi.pdb",
+      "bytes": 11563008,
+      "sha256": "e74caeda07ed4e501773d384af7cd388e2259d56cb4b97ab7d25c0cfaa25c931"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!Symbols/smpd.pdb",
+      "bytes": 5820416,
+      "sha256": "2134a11d324b3fd7134a4053f7530dd15d26ab01c87124ed94fa0f85b072ac58"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!licenses/COPYRIGHT-mpich.txt",
+      "bytes": 1579,
+      "sha256": "46c5a444da13a066696d23a1d3e0edf504163f6a4dbee9115d1ed43df47a2f68"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!licenses/LICENSE.txt",
+      "bytes": 1183,
+      "sha256": "dea9265341829002e2c23a7372393eb2ed6e26085fb623f38a4ba0af833f30a6"
+    },
+    {
+      "path": "msmpi-native-windows-10.1.4.1-x64.zip!licenses/NetworkDirect-LICENSE.txt",
+      "bytes": 1162,
+      "sha256": "27ebda9d51f0a56b7e281ccd8230a27236dcb51c05f64b07869ecf6e965d68b0"
+    }
   ]
 }

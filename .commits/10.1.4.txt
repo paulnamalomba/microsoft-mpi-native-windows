@@ -314,3 +314,12 @@ Limits:
 Later commits: this acceptance commit adds only .commits records,
 MSMPI_INTERNAL_VERSION and native/check_package.py, the consumer-side
 checker used above. No built source changed after 9a5eb72.
+
+Record schema alignment for 10.1.4.1 (no counter change)
+--------------------------------------------------------
+manage-repo.ps1 (Assert-Publishable) reads the shared schema used by the
+backend's build records: accepted, status, artifacts. The 10.1.4.1 record
+gained schema 2 and the fields previous, candidate, accepted, status
+("passed"), artifact_produced, utc and artifacts. artifacts lists the zip
+and each zip member as zip!path. The existing values, hashes and evidence
+are unchanged.
