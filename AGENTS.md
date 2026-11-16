@@ -11,7 +11,7 @@ This is an independently maintained product fork. It starts from upstream `micro
 - Do not add an upstream remote with a push URL.
 - Do not push branches or tags there, and do not open pull requests, issues or comments there.
 - Upstream tags are not republished here; this fork's own tags start with its first accepted build.
-- GitHub records this repository as a fork, so tools may default to the upstream base. Every push and any requested pull request must explicitly target `paulnamalomba/microsoft-mpi-native-windows`. Do not create pull requests unless the user asks.
+- GitHub records this repository as a fork, so tools may default to the upstream base. Every push and any requested pull request must explicitly target `paulnamalomba/microsoft-mpi-native-windows`. Create pull requests only when the user asks or the [agent workflow](#agent-workflow) below requires one.
 
 ### Purpose and scope
 
@@ -50,6 +50,17 @@ The fork provides the MPI runtime and SDK for SESKAFEA on native Windows x64.
 5. Downstream requalification before SESKA adopts a build: PETSc fork full profiles, both sparse solvers, and SESKA numerical, lifecycle and packaging checks.
 
 A zero exit is never success evidence by itself.
+
+## Agent Workflow
+
+These rules apply to the orchestrator and its subagents. The suite `AGENTS.md` holds the same common rules. In this fork `master` follows upstream and the product branch is `feature/native-seska-integration`, whose commit the suite pins. Until the user names a different target, "the default branch" below means that product branch.
+
+- **Required (user, 16 November 2026), main stays current:** once a pull request merges, its work must be on the default branch. When a PR merges into an intermediate or stacked branch, a merge agent carries that branch into the default branch at once: it merges with `--no-ff`, resolves conflicts by intent, verifies, pushes to this fork, and merges the merge PR under the user's standing authorisation for this step. Agents never merge a PR the user has not merged. Open stacked PRs against the default branch where possible, because `Closes #n` links and closes issues only for PRs into GitHub's default branch.
+- **Required (user, 16 November 2026), subagent models:** subagents run Claude Opus at high effort (implementation, merges, code reviews) or Claude Fable at medium effort (lean reviews, research, tracker and evidence checks). The orchestrator works as chief of staff: it hands work to background subagents through context pointers (brief files, commits, issues) and improves the agent environment before feature work, with no workarounds.
+- **Required (user, 16 November 2026), skill routing:** use `planning-and-task-breakdown` for features and new implementations (the broad points of the implementation roadmap) before issues are written, `multi-opinion` for architecture decisions and for `research`, and `issue-and-pr-based-development` for the tracker, branch and PR flow.
+- **Required (user, 16 November 2026), test scope per step:** run focused tests (the cases and checks the change touches) at each step. Run the full required checks only before review and in the build or acceptance run, and keep complete logs of every full run. Acceptance requirements are unchanged.
+- **Required (user, 16 November 2026), merge verification reuse:** a merge that changes no build-affecting file (only verification evidence, notes or docs) reuses the verified parent's results, with the `git diff --name-only` output as evidence. Any change to source, tests, build files, tools or dependencies is rebuilt and verified.
+- **Required (user, 11 and 12 November 2026), one review per PR, before the build record:** each PR gets one independent code review, and each vendor patch one correctness review. Issue acceptance criteria plus tests are the contract, with no prose contract freezes. Build numbers here are scarce (one digit per field), so the review and its fixes come before the build, and a build number is spent once, on the reviewed head.
 
 ## Shared Instruction Entry Points
 
