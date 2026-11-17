@@ -26,6 +26,12 @@ function Invoke-Git {
     return $output
 }
 
+# True when the note text records exactly this version: 0.1.2.1 is not found inside 0.1.2.10 or 10.1.2.1.
+function Test-NoteRecordsVersion {
+    param([string]$NoteText, [string]$Text)
+    return ($NoteText -cmatch ('(?<![0-9.])' + [regex]::Escape($Text) + '(?![0-9])'))
+}
+
 function Test-VersionText {
     param([string]$Text)
     return ($Text -cmatch $script:VersionPattern)
@@ -46,9 +52,17 @@ function Invoke-SelfCheck {
         if ((Test-VersionText $case[0]) -eq $case[1]) { Write-Output "ok    version $verb '$shown'" }
         else { Write-Output "FAIL  version $verb '$shown'"; $failed++ }
     }
+    # Family-note lookup is bounded: 10.1.4.2 is not found inside 10.1.4.20 or 110.1.4.2.
+    $notes = @(@("## 10.1.4.2`nbuilt", $true), @('tag native/v10.1.4.2.', $true), @('## 10.1.4.20', $false), @('## 110.1.4.2', $false), @('## 10.1.4.29 and 210.1.4.2', $false))
+    foreach ($note in $notes) {
+        $shown = $note[0] -replace "`n", ' '
+        $verb = if ($note[1]) { 'records' } else { 'does not record' }
+        if ((Test-NoteRecordsVersion $note[0] '10.1.4.2') -eq $note[1]) { Write-Output "ok    note '$shown' $verb 10.1.4.2" }
+        else { Write-Output "FAIL  note '$shown' $verb 10.1.4.2"; $failed++ }
+    }
     if (Test-VersionText $script:AcceptedVersion) { Write-Output "ok    $script:VersionFile holds a valid version" }
     else { Write-Output "FAIL  $script:VersionFile holds a valid version"; $failed++ }
-    Write-Output "checks: $($cases.Count + 1 - $failed) passed, $failed failed"
+    Write-Output "checks: $($cases.Count + $notes.Count + 1 - $failed) passed, $failed failed"
     if ($failed) { throw "$failed self-check(s) failed" }
 }
 
@@ -83,7 +97,7 @@ function Assert-Publishable {
         throw 'Build evidence does not identify a verified artifact'
     }
     if (-not (Test-Path -LiteralPath $script:FamilyNote)) { throw 'Missing family note' }
-    if ((Get-Content -LiteralPath $script:FamilyNote -Raw) -notmatch [regex]::Escape($script:AcceptedVersion)) {
+    if (-not (Test-NoteRecordsVersion (Get-Content -LiteralPath $script:FamilyNote -Raw) $script:AcceptedVersion)) {
         throw 'Family note does not record this accepted version'
     }
     if ((Invoke-Git -Arguments @('status','--porcelain','--untracked-files=no') | Out-String).Trim()) {
