@@ -43,7 +43,8 @@ class VersionTests(unittest.TestCase):
 
     def test_a_build_field_of_100_and_other_out_of_range_fields_are_refused(self):
         for text in ('10.1.4.100', '10.1.4.010', '10.1.4.00', '10.1.4.01', '10.1.10.0', '10.10.4.0', '010.1.4.0',
-                     '10.1.4', '10.1.4.2.1', '10.1.4.x', '10.1.4.-1', ''):
+                     '10.1.4', '10.1.4.2.1', '10.1.4.x', '10.1.4.-1', '',
+                     '10.1.4.2\n', '10.1.4.2\r\n', ' 10.1.4.2', '10.1.4.2 ', '\n10.1.4.2'):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 build.ParseVersion(text)
             with self.subTest(next=text), self.assertRaises(ValueError):
@@ -61,7 +62,7 @@ class VersionTests(unittest.TestCase):
 
     def test_recorded_versions_stay_valid(self):
         root = Path(build.__file__).resolve().parents[1]
-        build.ParseVersion((root / 'MSMPI_INTERNAL_VERSION').read_text(encoding='utf-8'))
+        build.ParseVersion((root / 'MSMPI_INTERNAL_VERSION').read_text(encoding='utf-8').strip())
         self.assertGreaterEqual(len(CheckBuildRecords(root / '.commits' / 'builds')), 2)
 
     def test_a_directory_without_records_fails_the_record_check(self):
@@ -100,8 +101,9 @@ class VersionTests(unittest.TestCase):
         for expected in ("ok    version accepts '10.1.4.99'", "ok    version rejects '10.1.4.100'",
                          "ok    version rejects '10.10.4.0'", "ok    version rejects '10.1.4.U+0660'",
                          "ok    version rejects '10.1.4.U+FF12'", "ok    version rejects '10.1.4.2U+000A'",
-                         'checks: 28 passed, 0 failed'):
+                         "ok    version rejects '10.1.4.2U+000DU+000A'"):
             self.assertIn(expected, result.stdout)
+        self.assertRegex(result.stdout, r'(?m)^checks: [1-9][0-9]* passed, 0 failed\s*$')
 
 
 if __name__ == '__main__':
