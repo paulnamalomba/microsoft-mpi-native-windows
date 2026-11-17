@@ -1,6 +1,8 @@
 """Internal version format and progression: <breaking>.<0-9>.<0-9>.<0-99> (AGENTS.md)."""
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -84,6 +86,22 @@ class VersionTests(unittest.TestCase):
                 (Path(scratch) / name).write_text(json.dumps(content), encoding='utf-8')
                 with self.assertRaises(ValueError):
                     CheckBuildRecords(Path(scratch))
+
+    def test_manage_repo_version_rule_passes_its_self_check(self):
+        """.commits/manage-repo.ps1 holds its own copy of the rule; its check action covers 10.1.4.99, 10.1.4.100,
+        10.10.4.0, non-ASCII digits and a trailing newline. PowerShell 7 is required, so a missing pwsh fails."""
+        root = Path(build.__file__).resolve().parents[1]
+        pwsh = shutil.which('pwsh')
+        self.assertIsNotNone(pwsh, 'pwsh (PowerShell 7) is required for the manage-repo.ps1 self-check')
+        result = subprocess.run([pwsh, '-NoProfile', '-NonInteractive', '-File', str(root / '.commits' / 'manage-repo.ps1'),
+                                 '-Action', 'check'], capture_output=True, text=True, encoding='utf-8', timeout=120)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn('FAIL', result.stdout)
+        for expected in ("ok    version accepts '10.1.4.99'", "ok    version rejects '10.1.4.100'",
+                         "ok    version rejects '10.10.4.0'", "ok    version rejects '10.1.4.U+0660'",
+                         "ok    version rejects '10.1.4.U+FF12'", "ok    version rejects '10.1.4.2U+000A'",
+                         'checks: 28 passed, 0 failed'):
+            self.assertIn(expected, result.stdout)
 
 
 if __name__ == '__main__':
