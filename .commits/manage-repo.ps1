@@ -12,6 +12,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $script:RepoRoot = Split-Path $PSScriptRoot -Parent
 $script:VersionFile = 'MSMPI_INTERNAL_VERSION'
+# <breaking>.<major 0-9>.<minor 0-9>.<build 0-99>, ASCII digits, no zero padding (AGENTS.md). \z refuses a trailing newline.
+$script:VersionPattern = '\A(0|[1-9][0-9]*)\.([0-9])\.([0-9])\.(0|[1-9][0-9]?)\z'
 $script:ExpectedRepository = 'github.com/paulnamalomba/microsoft-mpi-native-windows'
 $script:TagPrefix = 'native/v'
 $script:Product = 'msmpi-native-windows'
@@ -100,7 +102,7 @@ try {
     }
     $null = Invoke-Git -Arguments @('rev-parse','--show-toplevel')
     $script:AcceptedVersion = (Get-Content -LiteralPath (Join-Path $script:RepoRoot $script:VersionFile) -Raw).Trim()
-    if ($script:AcceptedVersion -cnotmatch '^(0|[1-9][0-9]*)\.([0-9])\.([0-9])\.(0|[1-9][0-9]?)$') {
+    if ($script:AcceptedVersion -cnotmatch $script:VersionPattern) {
         throw 'Invalid canonical bounded four-part version'
     }
     if ($Version -and $Version -ne $script:AcceptedVersion) { throw "-Version must equal $script:VersionFile ($script:AcceptedVersion)" }

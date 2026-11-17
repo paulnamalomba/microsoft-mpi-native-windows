@@ -270,13 +270,14 @@ def ProjectImports(project, packages):
 
 
 # Major and minor hold one digit; the build field runs 0-99 without zero padding (AGENTS.md).
-VERSION = re.compile(r'^(0|[1-9]\d*)\.([0-9])\.([0-9])\.(0|[1-9][0-9]?)$')
+# ASCII classes only: \d also matches other Unicode decimal digits, which int() would accept.
+VERSION = re.compile(r'^(0|[1-9][0-9]*)\.([0-9])\.([0-9])\.(0|[1-9][0-9]?)$')
 LIBRARY_PRODUCT = 'MS-MPI native-windows'
 ISSUES_URL = 'https://github.com/paulnamalomba/microsoft-mpi-native-windows/issues'
 
 
 def ParseVersion(text):
-    match = VERSION.match(text.strip())
+    match = VERSION.fullmatch(text.strip())
     if not match:
         raise ValueError('Not a canonical <breaking>.<major 0-9>.<minor 0-9>.<build 0-99> version: ' + text)
     return tuple(int(field) for field in match.groups())
